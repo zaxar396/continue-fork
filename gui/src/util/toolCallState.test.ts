@@ -1,5 +1,12 @@
 import { ToolCallDelta, ToolCallState } from "core";
-import { addToolCallDeltaToState } from "./toolCallState";
+import { BuiltInToolNames } from "core/tools/builtIn";
+import {
+  addToolCallDeltaToState,
+  isMcpTool,
+  resolveAutoRunPolicy,
+  shouldAutoAcceptApplyDiff,
+  shouldSkipToolPermissionPrompt,
+} from "./toolCallState";
 
 describe("addToolCallDeltaToState", () => {
   it("should initialize a new tool call state when current state is undefined", () => {
@@ -508,5 +515,209 @@ describe("addToolCallDeltaToState", () => {
       '{"query":"test","limit":10}',
     );
     expect(result.parsedArgs).toEqual({ query: "test", limit: 10 });
+  });
+});
+
+describe("shouldSkipToolPermissionPrompt", () => {
+  it("skips prompts for file edit and create tools", () => {
+    expect(
+      shouldSkipToolPermissionPrompt(BuiltInToolNames.EditExistingFile),
+    ).toBe(true);
+    expect(
+      shouldSkipToolPermissionPrompt(BuiltInToolNames.SingleFindAndReplace),
+    ).toBe(true);
+    expect(shouldSkipToolPermissionPrompt(BuiltInToolNames.MultiEdit)).toBe(
+      true,
+    );
+    expect(shouldSkipToolPermissionPrompt(BuiltInToolNames.CreateNewFile)).toBe(
+      true,
+    );
+  });
+
+  it("does not skip prompts for terminal or read tools", () => {
+    expect(
+      shouldSkipToolPermissionPrompt(BuiltInToolNames.RunTerminalCommand),
+    ).toBe(false);
+    expect(shouldSkipToolPermissionPrompt(BuiltInToolNames.ReadFile)).toBe(
+      false,
+    );
+  });
+});
+
+describe("resolveAutoRunPolicy", () => {
+  const safeAutoRun = {
+    autoRunSafeTerminalCommands: true,
+    autoRunDangerousTerminalCommands: false,
+    autoRunMcpTools: false,
+  };
+  const mcpTool = { uri: "mcp://server/tool" };
+
+  it("auto-runs safe terminal commands when the safe toggle is on", () => {
+    expect(
+      resolveAutoRunPolicy(
+        BuiltInToolNames.RunTerminalCommand,
+        undefined,
+        "allowedWithoutPermission",
+        "allowedWithoutPermission",
+        safeAutoRun,
+      ),
+    ).toBe("allowedWithoutPermission");
+  });
+
+  it("asks before running safe terminal commands when the safe toggle is off", () => {
+    expect(
+      resolveAutoRunPolicy(
+        BuiltInToolNames.RunTerminalCommand,
+        undefined,
+        "allowedWithoutPermission",
+        "allowedWithoutPermission",
+        { ...safeAutoRun, autoRunSafeTerminalCommands: false },
+      ),
+    ).toBe("allowedWithPermission");
+  });
+
+  it("still asks for high-risk commands when only the safe toggle is on", () => {
+    expect(
+      resolveAutoRunPolicy(
+        BuiltInToolNames.RunTerminalCommand,
+        undefined,
+        "allowedWithoutPermission",
+        "allowedWithPermission",
+        safeAutoRun,
+      ),
+    ).toBe("allowedWithPermission");
+  });
+
+  it("keeps blocked commands disabled when the dangerous toggle is off", () => {
+    expect(
+      resolveAutoRunPolicy(
+        BuiltInToolNames.RunTerminalCommand,
+        undefined,
+        "allowedWithoutPermission",
+        "disabled",
+        safeAutoRun,
+      ),
+    ).toBe("disabled");
+  });
+
+  it("auto-runs high-risk and blocked commands when the dangerous toggle is on", () => {
+    const dangerousOn = {
+      ...safeAutoRun,
+      autoRunDangerousTerminalCommands: true,
+    };
+    expect(
+      resolveAutoRunPolicy(
+        BuiltInToolNames.RunTerminalCommand,
+        undefined,
+        "allowedWithoutPermission",
+        "allowedWithPermission",
+        dangerousOn,
+      ),
+    ).toBe("allowedWithoutPermission");
+    expect(
+      resolveAutoRunPolicy(
+        BuiltInToolNames.RunTerminalCommand,
+        undefined,
+        "allowedWithoutPermission",
+        "disabled",
+        dangerousOn,
+      ),
+    ).toBe("allowedWithoutPermission");
+  });
+
+  it("does not auto-run when the terminal tool itself is disabled", () => {
+    expect(
+      resolveAutoRunPolicy(
+        BuiltInToolNames.RunTerminalCommand,
+        undefined,
+        "disabled",
+        "disabled",
+        {
+          autoRunSafeTerminalCommands: true,
+          autoRunDangerousTerminalCommands: true,
+          autoRunMcpTools: true,
+        },
+      ),
+    ).toBe("disabled");
+  });
+
+  it("auto-runs MCP tools when the MCP toggle is on", () => {
+    expect(
+      resolveAutoRunPolicy(
+        "github_create_issue",
+        mcpTool,
+        "allowedWithPermission",
+        "allowedWithPermission",
+        { ...safeAutoRun, autoRunMcpTools: true },
+      ),
+    ).toBe("allowedWithoutPermission");
+  });
+
+  it("asks before running MCP tools when the MCP toggle is off", () => {
+    expect(
+      resolveAutoRunPolicy(
+        "github_create_issue",
+        mcpTool,
+        "allowedWithPermission",
+        "allowedWithPermission",
+        safeAutoRun,
+      ),
+    ).toBe("allowedWithPermission");
+  });
+
+  it("does not auto-run a disabled MCP tool", () => {
+    expect(
+      resolveAutoRunPolicy(
+        "github_create_issue",
+        mcpTool,
+        "disabled",
+        "disabled",
+        { ...safeAutoRun, autoRunMcpTools: true },
+      ),
+    ).toBe("disabled");
+  });
+});
+
+describe("isMcpTool", () => {
+  it("detects MCP tool URIs", () => {
+    expect(isMcpTool({ uri: "mcp://server/tool" })).toBe(true);
+    expect(isMcpTool({ uri: "https://example.com" })).toBe(false);
+    expect(isMcpTool(undefined)).toBe(false);
+  });
+});
+
+describe("shouldAutoAcceptApplyDiff", () => {
+  it("auto-accepts edit tool diffs even when stored policy is ask first", () => {
+    expect(
+      shouldAutoAcceptApplyDiff(
+        BuiltInToolNames.EditExistingFile,
+        "allowedWithPermission",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not auto-accept disabled tools", () => {
+    expect(
+      shouldAutoAcceptApplyDiff(BuiltInToolNames.EditExistingFile, "disabled"),
+    ).toBe(false);
+  });
+
+  it("auto-accepts non-edit tools when policy is automatic", () => {
+    expect(
+      shouldAutoAcceptApplyDiff(
+        BuiltInToolNames.CreateNewFile,
+        undefined,
+        "allowedWithoutPermission",
+      ),
+    ).toBe(true);
+  });
+
+  it("does not auto-accept non-edit tools that still ask first", () => {
+    expect(
+      shouldAutoAcceptApplyDiff(
+        BuiltInToolNames.RunTerminalCommand,
+        "allowedWithPermission",
+      ),
+    ).toBe(false);
   });
 });

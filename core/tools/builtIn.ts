@@ -30,3 +30,12 @@ export const CLIENT_TOOLS_IMPLS = [
   BuiltInToolNames.SingleFindAndReplace,
   BuiltInToolNames.MultiEdit,
 ];
+
+/** Write/terminal tools that should run without an Accept click by default. */
+export const AUTO_APPROVE_BY_DEFAULT_TOOL_NAMES: BuiltInToolNames[] = [
+  BuiltInToolNames.EditExistingFile,
+  BuiltInToolNames.SingleFindAndReplace,
+  BuiltInToolNames.MultiEdit,
+  BuiltInToolNames.CreateNewFile,
+  BuiltInToolNames.RunTerminalCommand,
+];

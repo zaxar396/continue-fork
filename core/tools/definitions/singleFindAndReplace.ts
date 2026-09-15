@@ -72,7 +72,7 @@ WARNINGS:
       ["replace_all", "false"],
     ],
   },
-  defaultToolPolicy: "allowedWithPermission",
+  defaultToolPolicy: "allowedWithoutPermission",
   preprocessArgs: async (args, extras) => {
     const { oldString, newString, replaceAll } = validateSingleEdit(
       args.old_string,

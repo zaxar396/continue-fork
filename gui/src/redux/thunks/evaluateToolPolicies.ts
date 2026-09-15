@@ -1,7 +1,13 @@
 import { ToolPolicy } from "@continuedev/terminal-security";
 import { Tool, ToolCallState } from "core";
 import { IIdeMessenger } from "../../context/IdeMessenger";
-import { isEditTool } from "../../util/toolCallState";
+import {
+  AutoRunSettings,
+  isMcpTool,
+  isTerminalCommandTool,
+  resolveAutoRunPolicy,
+  shouldSkipToolPermissionPrompt,
+} from "../../util/toolCallState";
 import { errorToolCall, updateToolCallOutput } from "../slices/sessionSlice";
 import { DEFAULT_TOOL_SETTING, ToolPolicies } from "../slices/uiSlice";
 import { AppThunkDispatch } from "../store";
@@ -12,6 +18,12 @@ interface EvaluatedPolicy {
   toolCallState: ToolCallState;
 }
 
+const DEFAULT_AUTO_RUN: AutoRunSettings = {
+  autoRunSafeTerminalCommands: true,
+  autoRunDangerousTerminalCommands: false,
+  autoRunMcpTools: false,
+};
+
 /**
  * Evaluates the tool policy for a tool call, including dynamic policy evaluation
  * Note that tool group policies are not considered here because activeTools already excludes disabled groups
@@ -21,20 +33,22 @@ async function evaluateToolPolicy(
   activeTools: Tool[],
   toolCallState: ToolCallState,
   toolPolicies: ToolPolicies,
+  autoRun: AutoRunSettings,
 ): Promise<EvaluatedPolicy> {
-  // allow edit tool calls without permission
-  if (isEditTool(toolCallState.toolCall.function.name)) {
+  const toolName = toolCallState.toolCall.function.name;
+  const tool =
+    toolCallState.tool ??
+    activeTools.find((candidate) => candidate.function.name === toolName);
+  const basePolicy =
+    toolPolicies[toolName] ??
+    tool?.defaultToolPolicy ??
+    DEFAULT_TOOL_SETTING;
+
+  // File writes skip the Accept click unless the tool is explicitly disabled.
+  if (basePolicy !== "disabled" && shouldSkipToolPermissionPrompt(toolName)) {
     return { policy: "allowedWithoutPermission", toolCallState };
   }
 
-  const basePolicy =
-    toolPolicies[toolCallState.toolCall.function.name] ??
-    activeTools.find(
-      (tool) => tool.function.name === toolCallState.toolCall.function.name,
-    )?.defaultToolPolicy ??
-    DEFAULT_TOOL_SETTING;
-
-  const toolName = toolCallState.toolCall.function.name;
   const result = await ideMessenger.request("tools/evaluatePolicy", {
     toolName,
     basePolicy,
@@ -51,16 +65,28 @@ async function evaluateToolPolicy(
   const dynamicPolicy = result.content.policy;
   const displayValue = result.content.displayValue;
 
-  // Ensure dynamic policy cannot be more lenient than base policy
-  // Policy hierarchy (most restrictive to least): disabled > allowedWithPermission > allowedWithoutPermission
-  if (basePolicy === "disabled") {
-    return { policy: "disabled", displayValue, toolCallState }; // Cannot override disabled
+  const resolvedPolicy = resolveAutoRunPolicy(
+    toolName,
+    tool,
+    basePolicy,
+    dynamicPolicy,
+    autoRun,
+  );
+
+  if (resolvedPolicy === "disabled") {
+    return { policy: "disabled", displayValue, toolCallState };
   }
+
+  if (isTerminalCommandTool(toolName) || isMcpTool(tool)) {
+    return { policy: resolvedPolicy, displayValue, toolCallState };
+  }
+
+  // Dynamic policy cannot be more lenient than the stored base policy
   if (
     basePolicy === "allowedWithPermission" &&
     dynamicPolicy === "allowedWithoutPermission"
   ) {
-    return { policy: "allowedWithPermission", displayValue, toolCallState }; // Cannot make more lenient
+    return { policy: "allowedWithPermission", displayValue, toolCallState };
   }
 
   return { policy: dynamicPolicy, displayValue, toolCallState };
@@ -77,6 +103,7 @@ export async function evaluateToolPolicies(
   activeTools: Tool[],
   generatedToolCalls: ToolCallState[],
   toolPolicies: ToolPolicies,
+  autoRun: AutoRunSettings = DEFAULT_AUTO_RUN,
 ): Promise<EvaluatedPolicy[]> {
   // Check if ALL tool calls are auto-approved using dynamic evaluation
   const policyResults = await Promise.all(
@@ -86,6 +113,7 @@ export async function evaluateToolPolicies(
         activeTools,
         toolCallState,
         toolPolicies,
+        autoRun,
       ),
     ),
   );

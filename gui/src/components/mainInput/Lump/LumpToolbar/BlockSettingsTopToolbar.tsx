@@ -1,7 +1,10 @@
 import {
+  CloudIcon,
+  CommandLineIcon,
   CubeIcon,
   ExclamationTriangleIcon,
   PencilIcon,
+  ShieldExclamationIcon,
   WrenchScrewdriverIcon,
 } from "@heroicons/react/24/outline";
 import { useContext } from "react";
@@ -13,6 +16,11 @@ import {
   selectToolCallsByStatus,
 } from "../../../../redux/selectors/selectToolCalls";
 import { setSelectedProfile } from "../../../../redux/slices/profilesSlice";
+import {
+  setAutoRunDangerousTerminalCommands,
+  setAutoRunMcpTools,
+  setAutoRunTerminalCommands,
+} from "../../../../redux/slices/uiSlice";
 import { ToolTip } from "../../../gui/Tooltip";
 import HoverItem from "../../InputToolbar/HoverItem";
 
@@ -26,6 +34,13 @@ export function BlockSettingsTopToolbar() {
   const { selectedProfile } = useAuth();
 
   const configError = useAppSelector((store) => store.config.configError);
+  const autoRunTerminalCommands = useAppSelector(
+    (store) => store.ui.autoRunTerminalCommands,
+  );
+  const autoRunDangerousTerminalCommands = useAppSelector(
+    (store) => store.ui.autoRunDangerousTerminalCommands,
+  );
+  const autoRunMcpTools = useAppSelector((store) => store.ui.autoRunMcpTools);
   const ideMessenger = useContext(IdeMessengerContext);
 
   const pendingToolCalls = useAppSelector(selectPendingToolCalls);
@@ -104,6 +119,82 @@ export function BlockSettingsTopToolbar() {
             <ToolTip content="Configure tools">
               <HoverItem onClick={handleToolsClick} px={2}>
                 <WrenchScrewdriverIcon className="text-description-muted h-3 w-3 hover:brightness-125" />
+              </HoverItem>
+            </ToolTip>
+
+            <ToolTip
+              content={
+                autoRunTerminalCommands
+                  ? "Auto-run safe terminal commands is on"
+                  : "Auto-run safe terminal commands is off"
+              }
+            >
+              <HoverItem
+                onClick={() =>
+                  dispatch(
+                    setAutoRunTerminalCommands(!autoRunTerminalCommands),
+                  )
+                }
+                px={2}
+              >
+                <CommandLineIcon
+                  className={`h-3 w-3 hover:brightness-125 ${
+                    autoRunTerminalCommands
+                      ? "text-success"
+                      : "text-description-muted"
+                  }`}
+                  data-testid="auto-run-terminal-toggle"
+                />
+              </HoverItem>
+            </ToolTip>
+
+            <ToolTip
+              content={
+                autoRunDangerousTerminalCommands
+                  ? "Auto-run dangerous terminal commands is on"
+                  : "Auto-run dangerous terminal commands is off"
+              }
+            >
+              <HoverItem
+                onClick={() =>
+                  dispatch(
+                    setAutoRunDangerousTerminalCommands(
+                      !autoRunDangerousTerminalCommands,
+                    ),
+                  )
+                }
+                px={2}
+              >
+                <ShieldExclamationIcon
+                  className={`h-3 w-3 hover:brightness-125 ${
+                    autoRunDangerousTerminalCommands
+                      ? "text-warning"
+                      : "text-description-muted"
+                  }`}
+                  data-testid="auto-run-dangerous-terminal-toggle"
+                />
+              </HoverItem>
+            </ToolTip>
+
+            <ToolTip
+              content={
+                autoRunMcpTools
+                  ? "Auto-run MCP tools is on"
+                  : "Auto-run MCP tools is off"
+              }
+            >
+              <HoverItem
+                onClick={() => dispatch(setAutoRunMcpTools(!autoRunMcpTools))}
+                px={2}
+              >
+                <CloudIcon
+                  className={`h-3 w-3 hover:brightness-125 ${
+                    autoRunMcpTools
+                      ? "text-success"
+                      : "text-description-muted"
+                  }`}
+                  data-testid="auto-run-mcp-toggle"
+                />
               </HoverItem>
             </ToolTip>
 

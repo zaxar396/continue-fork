@@ -54,7 +54,7 @@ beforeEach(async () => {
 });
 
 test(
-  "Edit run with ask first policy and no auto apply",
+  "Edit auto-applies without an Accept click",
   { timeout: 15000 },
   async () => {
     // Setup
@@ -154,7 +154,7 @@ test(
     await getElementByTestId("notch-applying-text");
     await getElementByTestId("notch-applying-cancel-button");
 
-    // Close the stream
+    // Close the stream — diffs for edit tools are auto-accepted
     ideMessenger.mockMessageToWebview("updateApplyState", {
       status: "done",
       streamId,
@@ -162,20 +162,14 @@ test(
       filepath: EDIT_FILE_URI,
     });
 
-    // Verify accept/reject buttons are present
-    const acceptButton = await getElementByTestId("edit-accept-button");
-    await getElementByTestId("edit-reject-button");
-
-    // Set the chat response text before accepting changes
-    ideMessenger.setChatResponseText(POST_EDIT_RESPONSE);
-
-    // Accept the changes, which should trigger a response after the tool call
-    await user.click(acceptButton);
-
-    expect(messengerPostSpy).toHaveBeenCalledWith("acceptDiff", {
-      streamId,
-      filepath: EDIT_FILE_URI,
+    await waitFor(() => {
+      expect(messengerPostSpy).toHaveBeenCalledWith("acceptDiff", {
+        streamId,
+        filepath: EDIT_FILE_URI,
+      });
     });
+
+    ideMessenger.setChatResponseText(POST_EDIT_RESPONSE);
 
     // Close the stream - this should trigger the streaming response
     ideMessenger.mockMessageToWebview("updateApplyState", {

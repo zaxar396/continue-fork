@@ -109,7 +109,7 @@ WARNINGS:
       ],
     ],
   },
-  defaultToolPolicy: "allowedWithPermission",
+  defaultToolPolicy: "allowedWithoutPermission",
   preprocessArgs: async (args, extras) => {
     const { edits } = validateMultiEdit(args);
     const fileUri = await validateSearchAndReplaceFilepath(

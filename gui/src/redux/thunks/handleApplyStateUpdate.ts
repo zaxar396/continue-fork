@@ -2,6 +2,7 @@ import { createAsyncThunk } from "@reduxjs/toolkit";
 import { ApplyState, ApplyToFilePayload } from "core";
 import { EDIT_MODE_STREAM_ID } from "core/edit/constants";
 import { logAgentModeEditOutcome } from "../../util/editOutcomeLogger";
+import { shouldAutoAcceptApplyDiff } from "../../util/toolCallState";
 import {
   selectApplyStateByToolCallId,
   selectToolCallById,
@@ -49,16 +50,21 @@ export const handleApplyStateUpdate = createAsyncThunk<
           applyState.toolCallId,
         );
 
-        if (
-          applyState.status === "done" &&
-          toolCallState?.toolCall.function.name &&
-          getState().ui.toolSettings[toolCallState.toolCall.function.name] ===
-            "allowedWithoutPermission"
-        ) {
-          extra.ideMessenger.post("acceptDiff", {
-            streamId: applyState.streamId,
-            filepath: applyState.filepath,
-          });
+        if (applyState.status === "done" && toolCallState) {
+          const toolName = toolCallState.toolCall.function.name;
+          const storedPolicy = getState().ui?.toolSettings?.[toolName];
+          if (
+            shouldAutoAcceptApplyDiff(
+              toolName,
+              storedPolicy,
+              toolCallState.tool?.defaultToolPolicy,
+            )
+          ) {
+            extra.ideMessenger.post("acceptDiff", {
+              streamId: applyState.streamId,
+              filepath: applyState.filepath,
+            });
+          }
         }
 
         if (applyState.status === "closed") {

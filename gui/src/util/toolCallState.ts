@@ -1,3 +1,4 @@
+import { ToolPolicy } from "@continuedev/terminal-security";
 import { ToolCallDelta, ToolCallState } from "core";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import { incrementalParseJson } from "core/util/incrementalParseJson";
@@ -76,4 +77,89 @@ const editToolNames: string[] = [
 ];
 export function isEditTool(toolName: string) {
   return editToolNames.includes(toolName);
+}
+
+/** File write tools that should execute without an Accept click. */
+export function shouldSkipToolPermissionPrompt(toolName: string) {
+  return isEditTool(toolName) || toolName === BuiltInToolNames.CreateNewFile;
+}
+
+export function isMcpTool(tool?: { uri?: string } | null): boolean {
+  return !!tool?.uri?.startsWith("mcp:");
+}
+
+export function isTerminalCommandTool(toolName: string): boolean {
+  return toolName === BuiltInToolNames.RunTerminalCommand;
+}
+
+export interface AutoRunSettings {
+  autoRunSafeTerminalCommands: boolean;
+  autoRunDangerousTerminalCommands: boolean;
+  autoRunMcpTools: boolean;
+}
+
+/**
+ * Applies auto-run toggles on top of the stored tool policy and the
+ * command-level security evaluation.
+ *
+ * Safe terminal commands are the security whitelist (ls, git status, …).
+ * Dangerous terminal commands are Ask First plus blocked (curl, sudo, rm -rf, …).
+ * MCP tools have no command-level classifier — the toggle covers every call.
+ */
+export function resolveAutoRunPolicy(
+  toolName: string,
+  tool: { uri?: string } | undefined,
+  basePolicy: ToolPolicy,
+  dynamicPolicy: ToolPolicy,
+  autoRun: AutoRunSettings,
+): ToolPolicy {
+  if (basePolicy === "disabled") {
+    return "disabled";
+  }
+
+  if (autoRun.autoRunMcpTools && isMcpTool(tool)) {
+    return "allowedWithoutPermission";
+  }
+
+  if (!isTerminalCommandTool(toolName)) {
+    return dynamicPolicy;
+  }
+
+  const isDangerousCommand =
+    dynamicPolicy === "disabled" ||
+    dynamicPolicy === "allowedWithPermission";
+
+  if (isDangerousCommand) {
+    if (autoRun.autoRunDangerousTerminalCommands) {
+      return "allowedWithoutPermission";
+    }
+    return dynamicPolicy;
+  }
+
+  if (autoRun.autoRunSafeTerminalCommands) {
+    return "allowedWithoutPermission";
+  }
+
+  return "allowedWithPermission";
+}
+
+export function shouldAutoAcceptApplyDiff(
+  toolName: string | undefined,
+  storedPolicy: ToolPolicy | undefined,
+  defaultPolicy?: ToolPolicy,
+): boolean {
+  if (!toolName) {
+    return false;
+  }
+
+  const effectivePolicy = storedPolicy ?? defaultPolicy;
+  if (effectivePolicy === "disabled") {
+    return false;
+  }
+
+  if (isEditTool(toolName)) {
+    return true;
+  }
+
+  return effectivePolicy === "allowedWithoutPermission";
 }

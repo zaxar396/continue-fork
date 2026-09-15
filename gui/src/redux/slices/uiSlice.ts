@@ -29,6 +29,9 @@ type UIState = {
   ruleSettings: RulePolicies;
   reasoningSettings: ReasoningSettings;
   ttsActive: boolean;
+  autoRunTerminalCommands: boolean;
+  autoRunDangerousTerminalCommands: boolean;
+  autoRunMcpTools: boolean;
 };
 
 export const DEFAULT_TOOL_SETTING: ToolPolicy = "allowedWithPermission";
@@ -49,6 +52,9 @@ export const DEFAULT_UI_SLICE: UIState = {
   },
   ruleSettings: {},
   reasoningSettings: {},
+  autoRunTerminalCommands: true,
+  autoRunDangerousTerminalCommands: false,
+  autoRunMcpTools: false,
 };
 
 export const uiSlice = createSlice({
@@ -149,6 +155,18 @@ export const uiSlice = createSlice({
       state.reasoningSettings[action.payload.modelTitle] =
         action.payload.enabled;
     },
+    setAutoRunTerminalCommands: (state, action: PayloadAction<boolean>) => {
+      state.autoRunTerminalCommands = action.payload;
+    },
+    setAutoRunDangerousTerminalCommands: (
+      state,
+      action: PayloadAction<boolean>,
+    ) => {
+      state.autoRunDangerousTerminalCommands = action.payload;
+    },
+    setAutoRunMcpTools: (state, action: PayloadAction<boolean>) => {
+      state.autoRunMcpTools = action.payload;
+    },
   },
 });
 
@@ -166,6 +184,9 @@ export const {
   toggleRuleSetting,
   setTTSActive,
   setReasoningSetting,
+  setAutoRunTerminalCommands,
+  setAutoRunDangerousTerminalCommands,
+  setAutoRunMcpTools,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

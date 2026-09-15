@@ -44,6 +44,18 @@ This included removing anonymous telemetry, pulling out authentication, squashin
 
 [![GitHub Releases](https://img.shields.io/badge/GitHub_Releases-181717?logo=github&logoColor=white)](https://github.com/continuedev/continue/releases) [![View source](https://img.shields.io/badge/View_source-181717?logo=github&logoColor=white)](extensions/intellij)
 
+## 2.0.2
+
+This fork lets the IDE extension apply code edits and create files without clicking Accept.
+
+Terminal and MCP auto-run are separate toggles in Tools (and in the chat toolbar):
+
+- **Auto-run safe terminal commands** (on by default) — typical commands such as `ls`, `git status`, and `npm test` run without confirmation. Turn it off to require Accept even for those.
+- **Auto-run dangerous terminal commands** (off by default) — high-risk and destructive commands such as `curl`, `sudo`, and `rm -rf` also run without Accept. Leave it off to keep Ask First and the security block list.
+- **Auto-run MCP tools** (off by default) — tools from connected MCP servers run without Accept.
+
+A tool that is disabled in tool policies still never runs.
+
 ## Contributors
 
 Thank you to the entire Continue community for helping us create a pioneering coding agent.

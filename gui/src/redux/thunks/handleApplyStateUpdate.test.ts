@@ -1,5 +1,6 @@
 import { ApplyState, ApplyToFilePayload, ToolCallState } from "core";
 import { EDIT_MODE_STREAM_ID } from "core/edit/constants";
+import { BuiltInToolNames } from "core/tools/builtIn";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { logAgentModeEditOutcome } from "../../util/editOutcomeLogger";
 import {
@@ -378,6 +379,81 @@ describe("handleApplyStateUpdate", () => {
       expect(updateApplyState).toHaveBeenCalledWith(applyState);
       expect(acceptToolCall).not.toHaveBeenCalled();
       expect(streamResponseAfterToolCall).not.toHaveBeenCalled();
+    });
+
+    it("should auto-accept diffs for edit tools", async () => {
+      const toolCallState: ToolCallState = {
+        toolCallId: "test-tool-call",
+        status: "calling",
+        toolCall: {
+          id: "name",
+          function: {
+            name: BuiltInToolNames.EditExistingFile,
+            arguments: "unused",
+          },
+          type: "function",
+        },
+        parsedArgs: {},
+      };
+      vi.mocked(findToolCallById).mockReturnValue(toolCallState);
+      mockGetState.mockReturnValue({
+        session: { history: [] },
+        ui: { toolSettings: {} },
+      });
+
+      const applyState: ApplyState = {
+        streamId: "chat-stream",
+        toolCallId: "test-tool-call",
+        status: "done",
+        filepath: "test.txt",
+        numDiffs: 1,
+      };
+
+      const thunk = handleApplyStateUpdate(applyState);
+      await thunk(mockDispatch, mockGetState, mockExtra);
+
+      expect(mockExtra.ideMessenger.post).toHaveBeenCalledWith("acceptDiff", {
+        streamId: "chat-stream",
+        filepath: "test.txt",
+      });
+    });
+
+    it("should not auto-accept diffs when the tool is disabled", async () => {
+      const toolCallState: ToolCallState = {
+        toolCallId: "test-tool-call",
+        status: "calling",
+        toolCall: {
+          id: "name",
+          function: {
+            name: BuiltInToolNames.EditExistingFile,
+            arguments: "unused",
+          },
+          type: "function",
+        },
+        parsedArgs: {},
+      };
+      vi.mocked(findToolCallById).mockReturnValue(toolCallState);
+      mockGetState.mockReturnValue({
+        session: { history: [] },
+        ui: {
+          toolSettings: {
+            [BuiltInToolNames.EditExistingFile]: "disabled",
+          },
+        },
+      });
+
+      const applyState: ApplyState = {
+        streamId: "chat-stream",
+        toolCallId: "test-tool-call",
+        status: "done",
+        filepath: "test.txt",
+        numDiffs: 1,
+      };
+
+      const thunk = handleApplyStateUpdate(applyState);
+      await thunk(mockDispatch, mockGetState, mockExtra);
+
+      expect(mockExtra.ideMessenger.post).not.toHaveBeenCalled();
     });
 
     it("should handle different status values", async () => {

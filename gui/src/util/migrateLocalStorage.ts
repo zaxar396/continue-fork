@@ -1,7 +1,13 @@
 import { ToolPolicy } from "@continuedev/terminal-security";
-import { BuiltInToolNames } from "core/tools/builtIn";
+import {
+  AUTO_APPROVE_BY_DEFAULT_TOOL_NAMES,
+  BuiltInToolNames,
+} from "core/tools/builtIn";
 import { clearToolPolicy, setToolPolicy } from "../redux/slices/uiSlice";
 import { AppDispatch } from "../redux/store";
+
+const AUTO_APPROVE_WRITE_TOOLS_MIGRATION_FLAG =
+  "continue.migratedAutoApproveWriteTools.v1";
 
 const validPolicyValues: ToolPolicy[] = [
   "allowedWithPermission",
@@ -63,6 +69,41 @@ function migrateToolPolicies(dispatch: AppDispatch) {
   }
 }
 
+function migrateAutoApproveWriteTools(dispatch: AppDispatch) {
+  if (localStorage.getItem(AUTO_APPROVE_WRITE_TOOLS_MIGRATION_FLAG) === "1") {
+    return;
+  }
+
+  let parsedSettings: Record<string, unknown> = {};
+  const persistedRedux = localStorage.getItem("persist:root");
+  if (persistedRedux) {
+    try {
+      const uiState = JSON.parse(persistedRedux)?.ui;
+      if (uiState) {
+        parsedSettings = JSON.parse(uiState)?.toolSettings ?? {};
+      }
+    } catch {
+      parsedSettings = {};
+    }
+  }
+
+  for (const toolName of AUTO_APPROVE_BY_DEFAULT_TOOL_NAMES) {
+    const current = parsedSettings[toolName];
+    if (current === "disabled" || current === "allowedWithoutPermission") {
+      continue;
+    }
+    dispatch(
+      setToolPolicy({
+        toolName,
+        policy: "allowedWithoutPermission",
+      }),
+    );
+  }
+
+  localStorage.setItem(AUTO_APPROVE_WRITE_TOOLS_MIGRATION_FLAG, "1");
+}
+
 export function migrateLocalStorage(dispatch: AppDispatch) {
   migrateToolPolicies(dispatch);
+  migrateAutoApproveWriteTools(dispatch);
 }
