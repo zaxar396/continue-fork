@@ -1,6 +1,10 @@
 import { ToolPolicy } from "@continuedev/terminal-security";
 import { Tool } from "../..";
-import { ResolvedPath, resolveInputPath } from "../../util/pathResolver";
+import {
+  ResolvedPath,
+  isTrustedFileAccess,
+  resolveInputPath,
+} from "../../util/pathResolver";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "../builtIn";
 import { evaluateFileAccessPolicy } from "../policies/fileAccess";
 
@@ -53,6 +57,9 @@ export const viewSubdirectoryTool: Tool = {
       | undefined;
     if (!resolvedPath) return basePolicy;
 
-    return evaluateFileAccessPolicy(basePolicy, resolvedPath.isWithinWorkspace);
+    return evaluateFileAccessPolicy(
+      basePolicy,
+      isTrustedFileAccess(resolvedPath),
+    );
   },
 };

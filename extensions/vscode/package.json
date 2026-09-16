@@ -2,7 +2,7 @@
   "name": "continue",
   "icon": "media/icon.png",
   "author": "Continue Dev, Inc",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "repository": {
     "type": "git",
     "url": "https://github.com/continuedev/continue"
@@ -147,6 +147,14 @@
           "type": "number",
           "default": 60,
           "description": "The period of time in minutes between automatic syncs."
+        },
+        "continue.allowedDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Absolute directory paths outside the workspace that Continue may read and list without asking for confirmation. Each entry also covers all subdirectories. Example: `C:/Users/you/go/pkg/mod`."
         }
       }
     },

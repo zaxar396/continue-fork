@@ -53,3 +53,53 @@ describe("migrateLocalStorage auto-approve write tools", () => {
     );
   });
 });
+
+describe("migrateLocalStorage auto-approve read_skill", () => {
+  const dispatch = vi.fn();
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.clearAllMocks();
+  });
+
+  it("sets read_skill to automatic once", () => {
+    migrateLocalStorage(dispatch);
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: {
+          toolName: "read_skill",
+          policy: "allowedWithoutPermission",
+        },
+      }),
+    );
+
+    dispatch.mockClear();
+    migrateLocalStorage(dispatch);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it("does not override a disabled read_skill tool", () => {
+    localStorage.setItem(
+      "persist:root",
+      JSON.stringify({
+        ui: JSON.stringify({
+          toolSettings: {
+            read_skill: "disabled",
+          },
+        }),
+      }),
+    );
+
+    migrateLocalStorage(dispatch);
+
+    expect(dispatch).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: {
+          toolName: "read_skill",
+          policy: "allowedWithoutPermission",
+        },
+      }),
+    );
+  });
+});

@@ -138,7 +138,8 @@ data class IdeSettings(
     val remoteConfigSyncPeriod: Int,
     val userToken: String,
     val pauseCodebaseIndexOnStart: Boolean,
-    val continueTestEnvironment: String
+    val continueTestEnvironment: String,
+    val allowedDirectories: List<String> = emptyList()
 )
 
 data class TerminalOptions(

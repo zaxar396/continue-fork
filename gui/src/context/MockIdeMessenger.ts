@@ -96,6 +96,15 @@ const DEFAULT_MOCK_CORE_RESPONSES: MockResponses = {
     didPrune: false,
     contextPercentage: 0.5,
   },
+  getIdeSettings: {
+    remoteConfigServerUrl: undefined,
+    remoteConfigSyncPeriod: 60,
+    userToken: "",
+    continueTestEnvironment: "none",
+    pauseCodebaseIndexOnStart: false,
+    allowedDirectories: [],
+  },
+  updateAllowedDirectories: undefined,
   "context/getContextItems": [
     {
       id: {

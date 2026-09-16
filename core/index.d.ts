@@ -816,6 +816,11 @@ export interface IdeSettings {
   userToken: string;
   continueTestEnvironment: "none" | "production" | "staging" | "local";
   pauseCodebaseIndexOnStart: boolean;
+  /**
+   * Absolute directory paths outside the workspace that file tools may
+   * access without prompting. Each entry also covers all subdirectories.
+   */
+  allowedDirectories?: string[];
 }
 
 export interface FileStats {

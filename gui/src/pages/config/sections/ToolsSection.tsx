@@ -36,6 +36,7 @@ import {
   setAutoRunMcpTools,
   setAutoRunTerminalCommands,
 } from "../../../redux/slices/uiSlice";
+import { AllowedDirectoriesSetting } from "../components/AllowedDirectoriesSetting";
 import { ConfigHeader } from "../components/ConfigHeader";
 import { ConfigRow } from "../components/ConfigRow";
 import { ToolPoliciesGroup } from "../components/ToolPoliciesGroup";
@@ -539,6 +540,7 @@ export function ToolsSection() {
               size={12}
             />
           </ConfigRow>
+          <AllowedDirectoriesSetting />
         </Card>
         <ToolPoliciesGroup
           showIcon={false}

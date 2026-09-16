@@ -56,4 +56,9 @@ describe("Tool Definitions", () => {
       }
     }
   });
+
+  it("should auto-approve read_skill by default", async () => {
+    const tool = await getToolObject(toolDefinitions.readSkillTool);
+    expect(tool.defaultToolPolicy).toBe("allowedWithoutPermission");
+  });
 });

@@ -694,6 +694,12 @@ class VsCodeIde implements IDE {
         "pauseCodebaseIndexOnStart",
         false,
       ),
+      allowedDirectories: (
+        settings.get<string[]>("allowedDirectories", []) ?? []
+      ).filter(
+        (directory) =>
+          typeof directory === "string" && directory.trim() !== "",
+      ),
     };
     return ideSettings;
   }
@@ -701,6 +707,16 @@ class VsCodeIde implements IDE {
   async getIdeSettings(): Promise<IdeSettings> {
     const ideSettings = this.getIdeSettingsSync();
     return ideSettings;
+  }
+
+  async updateAllowedDirectories(directories: string[]): Promise<void> {
+    await vscode.workspace
+      .getConfiguration(EXTENSION_NAME)
+      .update(
+        "allowedDirectories",
+        directories,
+        vscode.ConfigurationTarget.Global,
+      );
   }
 }
 

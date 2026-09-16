@@ -8,6 +8,8 @@ import { AppDispatch } from "../redux/store";
 
 const AUTO_APPROVE_WRITE_TOOLS_MIGRATION_FLAG =
   "continue.migratedAutoApproveWriteTools.v1";
+const AUTO_APPROVE_READ_SKILL_MIGRATION_FLAG =
+  "continue.migratedAutoApproveReadSkill.v1";
 
 const validPolicyValues: ToolPolicy[] = [
   "allowedWithPermission",
@@ -103,7 +105,38 @@ function migrateAutoApproveWriteTools(dispatch: AppDispatch) {
   localStorage.setItem(AUTO_APPROVE_WRITE_TOOLS_MIGRATION_FLAG, "1");
 }
 
+function migrateAutoApproveReadSkill(dispatch: AppDispatch) {
+  if (localStorage.getItem(AUTO_APPROVE_READ_SKILL_MIGRATION_FLAG) === "1") {
+    return;
+  }
+
+  let parsedSettings: Record<string, unknown> = {};
+  const persistedRedux = localStorage.getItem("persist:root");
+  if (persistedRedux) {
+    try {
+      const uiState = JSON.parse(persistedRedux)?.ui;
+      if (uiState) {
+        parsedSettings = JSON.parse(uiState)?.toolSettings ?? {};
+      }
+    } catch {
+      parsedSettings = {};
+    }
+  }
+
+  if (parsedSettings[BuiltInToolNames.ReadSkill] !== "disabled") {
+    dispatch(
+      setToolPolicy({
+        toolName: BuiltInToolNames.ReadSkill,
+        policy: "allowedWithoutPermission",
+      }),
+    );
+  }
+
+  localStorage.setItem(AUTO_APPROVE_READ_SKILL_MIGRATION_FLAG, "1");
+}
+
 export function migrateLocalStorage(dispatch: AppDispatch) {
   migrateToolPolicies(dispatch);
   migrateAutoApproveWriteTools(dispatch);
+  migrateAutoApproveReadSkill(dispatch);
 }

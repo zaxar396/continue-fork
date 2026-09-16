@@ -13,6 +13,7 @@ export const readSkillTool: GetTool = async (params) => {
     readonly: true,
     isInstant: true,
     group: BUILT_IN_GROUP_NAME,
+    defaultToolPolicy: "allowedWithoutPermission",
     function: {
       name: BuiltInToolNames.ReadSkill,
       description: `

@@ -296,6 +296,10 @@ export class VsCodeMessenger {
     this.onWebviewOrCore("getIdeSettings", async (msg) => {
       return ide.getIdeSettings();
     });
+
+    this.onWebview("updateAllowedDirectories", async (msg) => {
+      await this.ide.updateAllowedDirectories(msg.data);
+    });
     this.onWebviewOrCore("getDiff", async (msg) => {
       return ide.getDiff(msg.data.includeUnstaged);
     });

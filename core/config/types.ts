@@ -660,6 +660,7 @@ declare global {
     remoteConfigSyncPeriod: number;
     userToken: string;
     pauseCodebaseIndexOnStart: boolean;
+    allowedDirectories?: string[];
   }
   
   export interface IDE {

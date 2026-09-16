@@ -10,6 +10,126 @@ export interface ResolvedPath {
   displayPath: string;
   isAbsolute: boolean;
   isWithinWorkspace: boolean;
+  isInAllowedDirectory: boolean;
+}
+
+const WINDOWS_ABS_PATH = /^[a-zA-Z]:[\\/]/;
+
+function isWindowsPath(fsPath: string): boolean {
+  return WINDOWS_ABS_PATH.test(fsPath) || fsPath.startsWith("\\\\");
+}
+
+interface PathApi {
+  isAbsolute(p: string): boolean;
+  normalize(p: string): string;
+  resolve(...paths: string[]): string;
+  sep: string;
+}
+
+function pathApiFor(fsPath: string): PathApi {
+  return isWindowsPath(fsPath) || process.platform === "win32"
+    ? path.win32
+    : path;
+}
+
+/**
+ * Normalize a user-supplied or resolved filesystem path / file URI for comparison.
+ * Relative paths are rejected because their meaning depends on an unknown cwd.
+ */
+export function normalizeComparableFsPath(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  let fsPath: string;
+  if (/^file:/i.test(trimmed)) {
+    try {
+      fsPath = fileURLToPath(trimmed);
+    } catch {
+      return null;
+    }
+  } else {
+    fsPath = untildify(trimmed);
+  }
+
+  const pathApi = pathApiFor(fsPath);
+  if (!pathApi.isAbsolute(fsPath) && !isWindowsPath(fsPath)) {
+    return null;
+  }
+
+  const resolved = pathApi.normalize(pathApi.resolve(fsPath));
+  if (isWindowsPath(fsPath) || process.platform === "win32") {
+    return resolved.toLowerCase();
+  }
+  return resolved;
+}
+
+/**
+ * True when target is the allowed directory itself or a file/folder inside it.
+ * `c:\test` matches `c:\test\foo` but not `c:\test2`.
+ */
+export function isPathInsideDirectory(
+  targetPath: string,
+  directoryPath: string,
+): boolean {
+  const target = normalizeComparableFsPath(targetPath);
+  const directory = normalizeComparableFsPath(directoryPath);
+  if (!target || !directory) {
+    return false;
+  }
+
+  const pathApi = pathApiFor(target);
+  if (target === directory) {
+    return true;
+  }
+
+  const separator = pathApi.sep;
+  const prefix = directory.endsWith(separator)
+    ? directory
+    : directory + separator;
+  return target.startsWith(prefix);
+}
+
+export function isPathInsideAnyAllowedDirectory(
+  targetPath: string,
+  allowedDirectories: string[],
+): boolean {
+  return allowedDirectories.some((directory) =>
+    isPathInsideDirectory(targetPath, directory),
+  );
+}
+
+async function getAllowedDirectories(ide: IDE): Promise<string[]> {
+  try {
+    if (typeof ide.getIdeSettings !== "function") {
+      return [];
+    }
+    const settings = await ide.getIdeSettings();
+    if (!Array.isArray(settings?.allowedDirectories)) {
+      return [];
+    }
+    return settings.allowedDirectories.filter(
+      (directory) => typeof directory === "string" && directory.trim() !== "",
+    );
+  } catch {
+    return [];
+  }
+}
+
+async function checkIsInAllowedDirectory(
+  ide: IDE,
+  uri: string,
+  displayPath: string,
+): Promise<boolean> {
+  const allowedDirectories = await getAllowedDirectories(ide);
+  if (allowedDirectories.length === 0) {
+    return false;
+  }
+  return (
+    isPathInsideAnyAllowedDirectory(displayPath, allowedDirectories) ||
+    isPathInsideAnyAllowedDirectory(uri, allowedDirectories)
+  );
 }
 
 /**
@@ -43,6 +163,11 @@ export async function resolveInputPath(
       displayPath,
       isAbsolute: true,
       isWithinWorkspace,
+      isInAllowedDirectory: await checkIsInAllowedDirectory(
+        ide,
+        trimmedPath,
+        displayPath,
+      ),
     };
   }
 
@@ -66,6 +191,11 @@ export async function resolveInputPath(
       displayPath: expandedPath,
       isAbsolute: true,
       isWithinWorkspace,
+      isInAllowedDirectory: await checkIsInAllowedDirectory(
+        ide,
+        uri,
+        expandedPath,
+      ),
     };
   }
 
@@ -77,8 +207,19 @@ export async function resolveInputPath(
       displayPath: expandedPath,
       isAbsolute: false,
       isWithinWorkspace: true,
+      isInAllowedDirectory: await checkIsInAllowedDirectory(
+        ide,
+        workspaceUri,
+        expandedPath,
+      ),
     };
   }
 
   return null;
+}
+
+export function isTrustedFileAccess(resolvedPath: ResolvedPath): boolean {
+  return (
+    resolvedPath.isWithinWorkspace || resolvedPath.isInAllowedDirectory
+  );
 }

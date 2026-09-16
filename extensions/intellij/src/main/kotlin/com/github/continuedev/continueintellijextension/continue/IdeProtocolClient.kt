@@ -65,6 +65,10 @@ class IdeProtocolClient(
                         showTutorial(project)
                     }
 
+                    "updateAllowedDirectories" -> {
+                        respond(null)
+                    }
+
                     "jetbrains/isOSREnabled" -> {
                         respond(true)
                     }

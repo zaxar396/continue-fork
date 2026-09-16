@@ -41,6 +41,7 @@ class MessageTypes {
             // These only come from the GUI for now but should be here to prevent confusion
             "toggleDevTools",
             "showTutorial",
+            "updateAllowedDirectories",
 
             // These are jetbrains only and only come from the GUI for now
             // But again including for consistency
