@@ -14,14 +14,14 @@ export interface CompactionParams {
  * This helper function extracts the compaction logic from the main core handler.
  *
  * @param params - Object containing sessionId, index, historyManager, and currentModel
- * @returns Promise<void> - Updates the session with the conversation summary
+ * @returns The generated summary, also stored on the target history item
  */
 export async function compactConversation({
   sessionId,
   index,
   historyManager,
   currentModel,
-}: CompactionParams): Promise<void> {
+}: CompactionParams): Promise<string> {
   // Get the current session
   const session = historyManager.load(sessionId);
   const historyUpToIndex = session.history.slice(0, index + 1);
@@ -96,10 +96,11 @@ export async function compactConversation({
   );
 
   // Update the target message with the conversation summary
+  const summary = stripImages(response.content);
   const updatedHistory = [...session.history];
   updatedHistory[index] = {
     ...updatedHistory[index],
-    conversationSummary: stripImages(response.content),
+    conversationSummary: summary,
   };
 
   // Update the session with the new history
@@ -109,4 +110,5 @@ export async function compactConversation({
   };
 
   historyManager.save(updatedSession);
+  return summary;
 }

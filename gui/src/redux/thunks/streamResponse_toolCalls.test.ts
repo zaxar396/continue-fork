@@ -112,7 +112,7 @@ describe("streamResponseThunk - tool calls", () => {
         { role: "user", content: "Please search the codebase" },
       ],
       didPrune: false,
-      contextPercentage: 0.9,
+      contextPercentage: 0.79,
     };
     mockIdeMessengerWithTool.responses["tools/call"] = {
       contextItems: [
@@ -316,7 +316,7 @@ describe("streamResponseThunk - tool calls", () => {
     const setContextPercentageAction = dispatchedActions.find(
       (a: any) => a.type === "session/setContextPercentage",
     );
-    expect(setContextPercentageAction.payload).toBe(0.9);
+    expect(setContextPercentageAction.payload).toBe(0.79);
 
     const streamUpdates = dispatchedActions.filter(
       (a: any) => a.type === "session/streamUpdate",
@@ -539,7 +539,7 @@ describe("streamResponseThunk - tool calls", () => {
         ],
         id: "session-123",
         streamAborter: expect.any(AbortController),
-        contextPercentage: 0.9,
+        contextPercentage: 0.79,
         isPruned: false,
         title: "Session summary",
         inlineErrorMessage: undefined,
@@ -575,7 +575,7 @@ describe("streamResponseThunk - tool calls", () => {
         { role: "user", content: "Please search the codebase" },
       ],
       didPrune: false,
-      contextPercentage: 0.9,
+      contextPercentage: 0.79,
     };
 
     // Setup streaming generator with tool call requiring approval
@@ -735,7 +735,7 @@ describe("streamResponseThunk - tool calls", () => {
       },
       {
         type: "session/setContextPercentage",
-        payload: 0.9,
+        payload: 0.79,
       },
       {
         type: "symbols/updateFromContextItems/fulfilled",
@@ -1039,7 +1039,7 @@ describe("streamResponseThunk - tool calls", () => {
           },
         ],
         streamAborter: expect.any(AbortController),
-        contextPercentage: 0.9,
+        contextPercentage: 0.79,
         isPruned: false,
         title: "Session summary",
         inlineErrorMessage: undefined,
@@ -1084,7 +1084,7 @@ describe("streamResponseThunk - tool calls", () => {
         },
       ],
       didPrune: false,
-      contextPercentage: 0.85,
+      contextPercentage: 0.79,
     };
 
     mockIdeMessengerApproval.responses["tools/call"] = {
@@ -1289,7 +1289,7 @@ describe("streamResponseThunk - tool calls", () => {
       },
       {
         type: "session/setContextPercentage",
-        payload: 0.85,
+        payload: 0.79,
       },
       {
         type: "symbols/updateFromContextItems/fulfilled",
@@ -1585,7 +1585,7 @@ describe("streamResponseThunk - tool calls", () => {
       },
       {
         type: "session/setContextPercentage",
-        payload: 0.85,
+        payload: 0.79,
       },
       {
         type: "session/streamUpdate",
@@ -1866,7 +1866,7 @@ describe("streamResponseThunk - tool calls", () => {
         isStreaming: false, // Inactive after complete flow
         id: "session-123",
         streamAborter: expect.any(AbortController),
-        contextPercentage: 0.85,
+        contextPercentage: 0.79,
         inlineErrorMessage: undefined,
         isPruned: false,
       },
@@ -1892,7 +1892,7 @@ describe("streamResponseThunk - tool calls", () => {
         [terminalName]: "allowedWithoutPermission",
       };
       initialState.ui.autoRunTerminalCommands = false;
-      initialState.config.config.tools = [grepTool];
+      initialState.config.config.tools = [terminalTool];
       const mockStore = createMockStore(initialState);
 
       const mockIdeMessenger = mockStore.mockIdeMessenger;
@@ -2151,7 +2151,7 @@ describe("streamResponseThunk - tool calls", () => {
                 type: "function",
                 function: {
                   name: "some_tool",
-                  arguments: JSON.stringify({ arg: "value" }),
+                  arguments: JSON.stringify({ query: "value" }),
                 },
               },
             ],
@@ -2194,7 +2194,7 @@ describe("streamResponseThunk - tool calls", () => {
       const initialState = getRootStateWithClaude();
       initialState.config.config.tools = [terminalTool];
       initialState.ui.toolSettings = {
-        runTerminalCommand: "allowedWithPermission",
+        [terminalName]: "allowedWithPermission",
       };
       const mockStoreWithTerminalTool = createMockStore(initialState);
 
@@ -2212,7 +2212,7 @@ describe("streamResponseThunk - tool calls", () => {
             { role: "user", content: "Run eval command" },
           ],
           didPrune: false,
-          contextPercentage: 0.9,
+          contextPercentage: 0.79,
         };
       };
 
@@ -2249,7 +2249,7 @@ describe("streamResponseThunk - tool calls", () => {
                 id: "tool-call-eval",
                 type: "function",
                 function: {
-                  name: "runTerminalCommand",
+                  name: terminalName,
                   arguments: JSON.stringify({ command: 'eval "echo hello"' }),
                 },
               },

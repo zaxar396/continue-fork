@@ -88,9 +88,11 @@ function ThinkingBlockPeek({
         </div>
         <div
           id={`thinking-block-content-${index}`}
-          className={`overflow-y-auto transition-all duration-300 ease-in-out ${
-            open ? "max-h-[50vh] opacity-100" : "max-h-0 opacity-0"
-          }`}
+          className={
+            open
+              ? "max-h-[50vh] min-h-0 overflow-y-auto opacity-100"
+              : "hidden"
+          }
         >
           {redactedThinking ? (
             <div className="text-description pl-5 text-xs italic">

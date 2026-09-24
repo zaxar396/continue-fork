@@ -65,6 +65,10 @@ export enum ContinueErrorReason {
   // Skills
   SkillNotFound = "skill_not_found",
 
+  // Tool call rejected before execute
+  InvalidToolArgs = "invalid_tool_args",
+  UnknownTool = "unknown_tool",
+
   // Other
   Unspecified = "unspecified", // I.e. a known error but no specific code for it
   Unknown = "unknown", // I.e. an unexpected error

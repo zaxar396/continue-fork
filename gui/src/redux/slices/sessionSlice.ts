@@ -978,6 +978,15 @@ export const sessionSlice = createSlice({
       state.newestToolbarPreviewForInput[payload.inputId] =
         payload.contextItemId;
     },
+    setConversationSummary: (
+      state,
+      action: PayloadAction<{ index: number; summary: string }>,
+    ) => {
+      const item = state.history[action.payload.index];
+      if (item) {
+        item.conversationSummary = action.payload.summary;
+      }
+    },
     setCompactionLoading: (
       state,
       action: PayloadAction<{ index: number; loading: boolean }>,
@@ -1090,6 +1099,7 @@ export const {
   setIsPruned,
   setContextPercentage,
   setCompactionLoading,
+  setConversationSummary,
 } = sessionSlice.actions;
 
 export const { selectIsGatheringContext } = sessionSlice.selectors;

@@ -149,6 +149,14 @@ export function analyzeError(
       'No API key was sent with the request. Add "apiKey" to your model config.';
   }
 
+  if (
+    errorText.includes("MALFORMED_RESPONSE") ||
+    errorText.includes("Malformed JSON sent from server")
+  ) {
+    customErrorMessage =
+      "The model response stream was malformed, so this request was stopped. A tool call was missing an id or name, or the server sent a broken SSE payload. Send the message again.";
+  }
+
   // Ollama tool call parsing failure (transient model output issue)
   if (errorText.includes("error parsing tool call")) {
     customErrorMessage =

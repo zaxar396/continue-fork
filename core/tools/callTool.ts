@@ -23,7 +23,12 @@ import { searchWebImpl } from "./implementations/searchWeb";
 import { viewDiffImpl } from "./implementations/viewDiff";
 import { viewRepoMapImpl } from "./implementations/viewRepoMap";
 import { viewSubdirectoryImpl } from "./implementations/viewSubdirectory";
-import { coerceArgsToSchema, safeParseToolCallArgs } from "./parseArgs";
+import { coerceArgsToSchema } from "./parseArgs";
+import {
+  collectSchemaViolations,
+  formatInvalidArgs,
+  parseToolCallArguments,
+} from "./toolCallValidity";
 
 async function callHttpTool(
   url: string,
@@ -243,7 +248,26 @@ export async function callTool(
   mcpUiState?: McpUiState;
 }> {
   try {
-    const args = safeParseToolCallArgs(toolCall);
+    const parsed = parseToolCallArguments(toolCall.function?.arguments);
+    if (!parsed.ok) {
+      return {
+        contextItems: [],
+        errorMessage: formatInvalidArgs(tool.function.name, parsed.violations),
+        errorReason: ContinueErrorReason.InvalidToolArgs,
+      };
+    }
+    const violations = collectSchemaViolations(
+      parsed.args,
+      tool.function.parameters,
+    );
+    if (violations.length > 0) {
+      return {
+        contextItems: [],
+        errorMessage: formatInvalidArgs(tool.function.name, violations),
+        errorReason: ContinueErrorReason.InvalidToolArgs,
+      };
+    }
+    const args = parsed.args;
     const { contextItems, mcpUiState } = tool.uri
       ? await callToolFromUri(tool.uri, args, extras)
       : {

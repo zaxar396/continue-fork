@@ -3,6 +3,11 @@ import { LLMFullCompletionOptions, ModelDescription } from "core";
 import { getRuleId } from "core/llm/rules/getSystemMessageWithRules";
 import { ToCoreProtocol } from "core/protocol";
 import { BUILT_IN_GROUP_NAME } from "core/tools/builtIn";
+import {
+  malformedToolCallReason,
+  toMalformedResponseError,
+  isMalformedStreamError,
+} from "core/tools/toolCallValidity";
 import { selectActiveTools } from "../selectors/selectActiveTools";
 import { selectSelectedChatModel } from "../slices/configSlice";
 import {
@@ -22,6 +27,7 @@ import { ThunkApiType } from "../store";
 import { constructMessages } from "../util/constructMessages";
 
 import { modelSupportsNativeTools } from "core/llm/toolSupport";
+import { shouldAutoCompactContext } from "core/util/autoCompact";
 import { applyToolOverrides } from "core/tools/applyToolOverrides";
 import { addSystemMessageToolsToSystemMessage } from "core/tools/systemMessageTools/buildToolsSystemMessage";
 import { interceptSystemToolCalls } from "core/tools/systemMessageTools/interceptSystemToolCalls";
@@ -32,6 +38,7 @@ import {
   selectPendingToolCalls,
 } from "../selectors/selectToolCalls";
 import { getBaseSystemMessage } from "../util/getBaseSystemMessage";
+import { autoCompactHistoryIfNeeded } from "./autoCompact";
 import { callToolById } from "./callToolById";
 import { evaluateToolPolicies } from "./evaluateToolPolicies";
 import { preprocessToolCalls } from "./preprocessToolCallArgs";
@@ -147,35 +154,82 @@ export const streamNormalInput = createAsyncThunk<
         )
       : baseSystemMessage;
 
-    const withoutMessageIds = state.session.history.map((item) => {
-      const { id, ...messageWithoutId } = item.message;
-      return { ...item, message: messageWithoutId };
-    });
+    const buildMessages = () => {
+      const stateNow = getState();
+      const withoutMessageIds = stateNow.session.history.map((item) => {
+        const { id, ...messageWithoutId } = item.message;
+        return { ...item, message: messageWithoutId };
+      });
+      return constructMessages(
+        withoutMessageIds,
+        systemMessage,
+        stateNow.config.config.rules,
+        stateNow.ui.ruleSettings,
+        systemToolsFramework,
+      );
+    };
 
-    const { messages, appliedRules, appliedRuleIndex } = constructMessages(
-      withoutMessageIds,
-      systemMessage,
-      state.config.config.rules,
-      state.ui.ruleSettings,
-      systemToolsFramework,
-    );
+    let { messages, appliedRules, appliedRuleIndex } = buildMessages();
 
-    // TODO parallel tool calls will cause issues with this
-    // because there will be multiple tool messages, so which one should have applied rules?
-    dispatch(
-      setAppliedRulesAtIndex({
-        index: appliedRuleIndex,
-        appliedRules: appliedRules,
-      }),
-    );
+    const dispatchAppliedRules = () => {
+      // TODO parallel tool calls will cause issues with this
+      // because there will be multiple tool messages, so which one should have applied rules?
+      dispatch(
+        setAppliedRulesAtIndex({
+          index: appliedRuleIndex,
+          appliedRules: appliedRules,
+        }),
+      );
+    };
+    dispatchAppliedRules();
 
     dispatch(setActive());
     dispatch(setInlineErrorMessage(undefined));
 
-    const precompiledRes = await extra.ideMessenger.request("llm/compileChat", {
-      messages,
-      options: completionOptions,
-    });
+    const compileMessages = (nextMessages: typeof messages) =>
+      extra.ideMessenger.request("llm/compileChat", {
+        messages: nextMessages,
+        options: completionOptions,
+      });
+
+    let precompiledRes = await compileMessages(messages);
+    const notEnoughContext =
+      precompiledRes.status === "error" &&
+      precompiledRes.error.includes("Not enough context");
+
+    if (
+      shouldAutoCompactContext({
+        notEnoughContext,
+        didPrune:
+          precompiledRes.status === "success"
+            ? precompiledRes.content.didPrune
+            : false,
+        contextPercentage:
+          precompiledRes.status === "success"
+            ? precompiledRes.content.contextPercentage
+            : undefined,
+      })
+    ) {
+      const compacted = await autoCompactHistoryIfNeeded({
+        dispatch,
+        getState,
+        ideMessenger: extra.ideMessenger,
+        contextPercentage:
+          precompiledRes.status === "success"
+            ? precompiledRes.content.contextPercentage
+            : undefined,
+        didPrune:
+          precompiledRes.status === "success"
+            ? precompiledRes.content.didPrune
+            : false,
+        notEnoughContext,
+      });
+      if (compacted && getState().session.isStreaming) {
+        ({ messages, appliedRules, appliedRuleIndex } = buildMessages());
+        dispatchAppliedRules();
+        precompiledRes = await compileMessages(messages);
+      }
+    }
 
     if (precompiledRes.status === "error") {
       if (precompiledRes.error.includes("Not enough context")) {
@@ -255,6 +309,9 @@ export const streamNormalInput = createAsyncThunk<
         }
       }
     } catch (e) {
+      if (isMalformedStreamError(e)) {
+        throw toMalformedResponseError(e);
+      }
       const toolCallsToCancel = selectCurrentToolCalls(getState());
       if (
         toolCallsToCancel.length > 0 &&
@@ -282,12 +339,18 @@ export const streamNormalInput = createAsyncThunk<
     }
 
     // Tool call sequence:
-    // 1. Mark generating tool calls as generated
+    // 1. A tool call without an id or name is a broken stream, not a tool.
     const state1 = getState();
     if (streamAborter.signal.aborted || !state1.session.isStreaming) {
       return;
     }
     const originalToolCalls = selectCurrentToolCalls(state1);
+    const malformed = originalToolCalls
+      .map((tc) => malformedToolCallReason(tc.toolCall))
+      .find((reason): reason is string => !!reason);
+    if (malformed) {
+      throw toMalformedResponseError(new Error(malformed));
+    }
     const generatingCalls = originalToolCalls.filter(
       (tc) => tc.status === "generating",
     );
@@ -306,7 +369,12 @@ export const streamNormalInput = createAsyncThunk<
       return;
     }
     const generatedCalls2 = selectPendingToolCalls(state2);
-    await preprocessToolCalls(dispatch, extra.ideMessenger, generatedCalls2);
+    await preprocessToolCalls(
+      dispatch,
+      extra.ideMessenger,
+      generatedCalls2,
+      state2.config.config.tools,
+    );
 
     // 3. Security check: evaluate updated policies based on args
     const state3 = getState();
@@ -388,16 +456,15 @@ export const streamNormalInput = createAsyncThunk<
           }),
         );
       } else {
-        for (const { toolCallId } of originalToolCalls) {
-          unwrapResult(
-            await dispatch(
-              streamResponseAfterToolCall({
-                toolCallId,
-                depth: depth + 1,
-              }),
-            ),
-          );
-        }
+        const anchor = originalToolCalls[originalToolCalls.length - 1];
+        unwrapResult(
+          await dispatch(
+            streamResponseAfterToolCall({
+              toolCallId: anchor.toolCallId,
+              depth: depth + 1,
+            }),
+          ),
+        );
       }
     }
   },

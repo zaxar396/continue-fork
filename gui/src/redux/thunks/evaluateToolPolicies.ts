@@ -1,5 +1,6 @@
 import { ToolPolicy } from "@continuedev/terminal-security";
 import { Tool, ToolCallState } from "core";
+import { POLICY_BLOCKED } from "core/tools/toolCallValidity";
 import { IIdeMessenger } from "../../context/IdeMessenger";
 import {
   AutoRunSettings,
@@ -137,7 +138,7 @@ export async function evaluateToolPolicies(
             icon: "problems",
             name: "Security Policy Violation",
             description: "Command Disabled",
-            content: `This command has been disabled by security policy:\n\n${command}\n\nThis command cannot be executed as it may pose a security risk.`,
+            content: `${POLICY_BLOCKED}: This command has been disabled by security policy:\n\n${command}\n\nThis command cannot be executed as it may pose a security risk.`,
             hidden: false,
           },
         ],

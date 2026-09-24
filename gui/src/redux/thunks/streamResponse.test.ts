@@ -116,7 +116,7 @@ describe("streamResponseThunk", () => {
     mockIdeMessenger.responses["llm/compileChat"] = {
       compiledChatMessages: [{ role: "user", content: "Hello" }],
       didPrune: false,
-      contextPercentage: 0.8,
+      contextPercentage: 0.79,
     };
     const requestSpy = vi.spyOn(mockIdeMessenger, "request");
     const postSpy = vi.spyOn(mockIdeMessenger, "post");
@@ -229,7 +229,7 @@ describe("streamResponseThunk", () => {
       },
       {
         type: "session/setContextPercentage",
-        payload: 0.8,
+        payload: 0.79,
       },
       {
         type: "symbols/updateFromContextItems/fulfilled",
@@ -429,7 +429,7 @@ describe("streamResponseThunk", () => {
         title: "Session summary",
         isPruned: false,
         inlineErrorMessage: undefined,
-        contextPercentage: 0.8,
+        contextPercentage: 0.79,
         history: [
           {
             contextItems: [],
@@ -498,7 +498,7 @@ describe("streamResponseThunk", () => {
         { role: "user", content: "Please search the codebase" },
       ],
       didPrune: false,
-      contextPercentage: 0.9,
+      contextPercentage: 0.79,
     };
     mockIdeMessengerWithTool.responses["tools/call"] = {
       contextItems: [
@@ -654,7 +654,7 @@ describe("streamResponseThunk", () => {
     const setContextPercentageAction = dispatchedActions.find(
       (a: any) => a.type === "session/setContextPercentage",
     );
-    expect(setContextPercentageAction?.payload).toBe(0.9);
+    expect(setContextPercentageAction?.payload).toBe(0.79);
 
     const streamUpdates = dispatchedActions.filter(
       (a: any) => a.type === "session/streamUpdate",
@@ -866,7 +866,7 @@ describe("streamResponseThunk", () => {
         title: "Session summary",
         id: "session-123",
         streamAborter: expect.any(AbortController),
-        contextPercentage: 0.9,
+        contextPercentage: 0.79,
         isPruned: false,
         inlineErrorMessage: undefined,
       },
@@ -892,7 +892,7 @@ describe("streamResponseThunk", () => {
     mockIdeMessengerAbort.responses["llm/compileChat"] = {
       compiledChatMessages: [{ role: "user", content: "Hello" }],
       didPrune: false,
-      contextPercentage: 0.8,
+      contextPercentage: 0.79,
     };
     const requestSpy = vi.spyOn(mockIdeMessengerAbort, "request");
     const postSpy = vi.spyOn(mockIdeMessengerAbort, "post");
@@ -1030,7 +1030,7 @@ describe("streamResponseThunk", () => {
       },
       {
         type: "session/setContextPercentage",
-        payload: 0.8,
+        payload: 0.79,
       },
       {
         type: "symbols/updateFromContextItems/fulfilled",
@@ -1263,7 +1263,7 @@ describe("streamResponseThunk", () => {
         ],
         id: "session-123",
         streamAborter: expect.any(AbortController), // New controller after abort
-        contextPercentage: 0.8,
+        contextPercentage: 0.79,
         inlineErrorMessage: undefined,
         isPruned: false,
         title: "Session summary",

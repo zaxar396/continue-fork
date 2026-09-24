@@ -344,26 +344,83 @@ export function fromChatResponse(response: ChatCompletion): ChatMessage[] {
   return messages;
 }
 
+type ReasoningDelta = {
+  reasoning?: string;
+  reasoning_content?: string;
+  reasoning_details?: {
+    signature?: string;
+    [key: string]: any;
+  }[];
+};
+
+function thinkingMessageFromReasoning(
+  source: ReasoningDelta | undefined,
+): ThinkingChatMessage | undefined {
+  if (
+    !source?.reasoning_content &&
+    !source?.reasoning &&
+    !source?.reasoning_details?.length
+  ) {
+    return undefined;
+  }
+
+  return {
+    role: "thinking",
+    content: source.reasoning_content || source.reasoning || "",
+    signature: source.reasoning_details?.[0]?.signature,
+    reasoning_details: source.reasoning_details,
+  };
+}
+
+/**
+ * A chat completion chunk can carry the answer and reasoning together.
+ * Reasoning is returned first so the chat can show it as its own block.
+ * A full `chat.completion` object (message instead of delta) is handled too.
+ */
 export function fromChatCompletionChunk(
   chunk: ChatCompletionChunk,
-): ChatMessage | undefined {
-  const delta = chunk.choices?.[0]?.delta as
-    | (ChatCompletionChunk.Choice.Delta & {
-        reasoning?: string;
-        reasoning_content?: string;
-        reasoning_details?: {
-          signature?: string;
-        }[];
+): ChatMessage[] {
+  const choice = chunk.choices?.[0] as
+    | (ChatCompletionChunk.Choice & {
+        message?: ChatCompletionMessage & ReasoningDelta;
       })
     | undefined;
+  if (!choice) {
+    return [];
+  }
+
+  const delta = choice.delta as
+    | (ChatCompletionChunk.Choice.Delta & ReasoningDelta)
+    | undefined;
+  const hasDelta =
+    !!delta &&
+    (!!delta.content ||
+      !!delta.tool_calls?.length ||
+      !!delta.reasoning_content ||
+      !!delta.reasoning ||
+      !!delta.reasoning_details?.length);
+
+  if (!hasDelta && choice.message) {
+    return fromChatResponse({
+      ...chunk,
+      object: "chat.completion",
+      choices: [{ ...choice, message: choice.message }],
+    } as unknown as ChatCompletion);
+  }
+
+  const messages: ChatMessage[] = [];
+  const thinking = thinkingMessageFromReasoning(delta);
+  if (thinking) {
+    messages.push(thinking);
+  }
 
   if (delta?.content) {
-    return {
+    messages.push({
       role: "assistant",
       content: delta.content,
-    };
+    });
   } else if (delta?.tool_calls) {
-    const toolCalls = delta?.tool_calls
+    const toolCalls = delta.tool_calls
       .filter((tool_call) => !tool_call.type || tool_call.type === "function")
       .map((tool_call) => ({
         id: tool_call.id,
@@ -375,27 +432,15 @@ export function fromChatCompletionChunk(
       }));
 
     if (toolCalls.length > 0) {
-      return {
+      messages.push({
         role: "assistant",
         content: "",
         toolCalls,
-      };
+      });
     }
-  } else if (
-    delta?.reasoning_content ||
-    delta?.reasoning ||
-    delta?.reasoning_details?.length
-  ) {
-    const message: ThinkingChatMessage = {
-      role: "thinking",
-      content: delta.reasoning_content || delta.reasoning || "",
-      signature: delta?.reasoning_details?.[0]?.signature,
-      reasoning_details: delta?.reasoning_details as any[],
-    };
-    return message;
   }
 
-  return undefined;
+  return messages;
 }
 
 function handleTextDeltaEvent(

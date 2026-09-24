@@ -20,6 +20,7 @@ import Ollama from "./llm/llms/Ollama";
 import { EditAggregator } from "./nextEdit/context/aggregateEdits";
 import { createNewPromptFileV2 } from "./promptFiles/createNewPromptFile";
 import { callTool } from "./tools/callTool";
+import { formatUnknownTool } from "./tools/toolCallValidity";
 import { ChatDescriber } from "./util/chatDescriber";
 import { compactConversation } from "./util/conversationCompaction";
 import { GlobalContext } from "./util/GlobalContext";
@@ -628,13 +629,12 @@ export class Core {
       }
 
       try {
-        await compactConversation({
+        return await compactConversation({
           sessionId: msg.data.sessionId,
           index: msg.data.index,
           historyManager,
           currentModel,
         });
-        return undefined;
       } catch (error) {
         Logger.error(`Error compacting conversation: ${error}`);
         return undefined;
@@ -1087,7 +1087,11 @@ export class Core {
 
       const tool = config?.tools.find((t) => t.function.name === toolName);
       if (!tool) {
-        throw new Error(`Tool ${toolName} not found`);
+        return {
+          preprocessedArgs: undefined,
+          errorReason: ContinueErrorReason.UnknownTool,
+          errorMessage: formatUnknownTool(toolName),
+        };
       }
 
       try {
@@ -1158,7 +1162,12 @@ export class Core {
     );
 
     if (!tool) {
-      throw new Error(`Tool ${toolCall.function.name} not found`);
+      const name = toolCall.function.name;
+      return {
+        contextItems: [],
+        errorMessage: formatUnknownTool(name),
+        errorReason: ContinueErrorReason.UnknownTool,
+      };
     }
 
     if (!config.selectedModelByRole.chat) {

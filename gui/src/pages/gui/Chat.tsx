@@ -268,7 +268,12 @@ export function Chat() {
   );
 
   const renderChatHistoryItem = useCallback(
-    (item: ChatHistoryItemWithMessageId, index: number) => {
+    (
+      item: ChatHistoryItemWithMessageId,
+      index: number,
+      prevItem: ChatHistoryItemWithMessageId | null,
+      nextItem: ChatHistoryItemWithMessageId | null,
+    ) => {
       const {
         message,
         editorState,
@@ -303,12 +308,37 @@ export function Chat() {
       }
 
       if (message.role === "assistant") {
+        const priorThinking =
+          prevItem?.message.role === "thinking" &&
+          !prevItem.message.redactedThinking
+            ? renderChatMessage(prevItem.message).trim()
+            : "";
+        const displayItem: ChatHistoryItemWithMessageId =
+          priorThinking && !item.reasoning?.text?.trim()
+            ? {
+                ...item,
+                reasoning: {
+                  text: priorThinking,
+                  active: false,
+                  startAt: 0,
+                  endAt: 1,
+                },
+              }
+            : item;
+        const isEmptyPlaceholder =
+          !renderChatMessage(message).trim() &&
+          !toolCallStates?.length &&
+          nextItem?.message.role === "thinking";
+        if (isEmptyPlaceholder) {
+          return null;
+        }
+
         return (
           <>
             {/* Always render assistant content through normal path */}
             <div className="thread-message">
               <TimelineItem
-                item={item}
+                item={displayItem}
                 iconElement={
                   <ChatBubbleOvalLeftIcon width="16px" height="16px" />
                 }
@@ -322,7 +352,7 @@ export function Chat() {
                 <StepContainer
                   index={index}
                   isLast={index === history.length - 1}
-                  item={item}
+                  item={displayItem}
                   latestSummaryIndex={latestSummaryIndex}
                 />
               </TimelineItem>
@@ -343,13 +373,21 @@ export function Chat() {
         if (!thinkingContent?.trim()) {
           return null;
         }
+        const absorbedByAnswer =
+          !message.redactedThinking &&
+          nextItem?.message.role === "assistant" &&
+          (!!renderChatMessage(nextItem.message).trim() ||
+            !!nextItem.toolCallStates?.length);
+        if (absorbedByAnswer) {
+          return null;
+        }
         return (
           <div className={isBeforeLatestSummary ? "opacity-50" : ""}>
             <ThinkingBlockPeek
               content={thinkingContent}
               redactedThinking={message.redactedThinking}
               index={index}
-              prevItem={index > 0 ? history[index - 1] : null}
+              prevItem={prevItem}
               inProgress={index === history.length - 1 && isStreaming}
               signature={message.signature}
             />
@@ -396,7 +434,7 @@ export function Chat() {
         {highlights}
         {history
           .filter((item) => item.message.role !== "system")
-          .map((item, index: number) => (
+          .map((item, index, visibleHistory) => (
             <div
               key={item.message.id}
               style={{
@@ -409,7 +447,14 @@ export function Chat() {
                   dispatch(newSession());
                 }}
               >
-                {renderChatHistoryItem(item, index)}
+                {renderChatHistoryItem(
+                  item,
+                  index,
+                  index > 0 ? visibleHistory[index - 1] : null,
+                  index < visibleHistory.length - 1
+                    ? visibleHistory[index + 1]
+                    : null,
+                )}
               </ErrorBoundary>
               {index === history.length - 1 && <InlineErrorMessage />}
             </div>

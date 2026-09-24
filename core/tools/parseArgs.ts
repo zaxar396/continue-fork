@@ -17,9 +17,8 @@ export function safeParseToolCallArgs(
   try {
     return JSON.parse(toolCall.function?.arguments?.trim() || "{}");
   } catch (e) {
-    //console.error(
-    //  `Failed to parse tool call arguments:\nTool call: ${toolCall.function?.name + " " + toolCall.id}\nArgs:${toolCall.function?.arguments}\n`,
-    //);
+    // Provider history still needs an object. Tool execution uses
+    // parseToolCallArguments and does not turn a broken string into {}.
     return {};
   }
 }

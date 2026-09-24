@@ -623,8 +623,10 @@ export abstract class BaseLLM implements ILLM {
           if (!this.lastRequestId && typeof (chunk as any).id === "string") {
             this.lastRequestId = (chunk as any).id;
           }
-          const result = fromChatCompletionChunk(chunk);
-          if (result) {
+          for (const result of fromChatCompletionChunk(chunk)) {
+            if (result.role === "thinking") {
+              continue;
+            }
             const content = renderChatMessage(result);
             const formattedContent = this._formatChatMessage(result);
             interaction?.logItem({
@@ -1042,8 +1044,7 @@ export abstract class BaseLLM implements ILLM {
       if (!this.lastRequestId && typeof (chunk as any).id === "string") {
         this.lastRequestId = (chunk as any).id;
       }
-      const chatChunk = fromChatCompletionChunk(chunk as any);
-      if (chatChunk) {
+      for (const chatChunk of fromChatCompletionChunk(chunk as any)) {
         yield chatChunk;
       }
       if ((chunk as any).citations && Array.isArray((chunk as any).citations)) {
