@@ -5,6 +5,7 @@ import { useDispatch } from "react-redux";
 import { useAppSelector } from "../../redux/hooks";
 import { selectUIConfig } from "../../redux/slices/configSlice";
 import { deleteMessage } from "../../redux/slices/sessionSlice";
+import { isAssistantQuestion } from "../../util/isAssistantQuestion";
 import ThinkingBlockPeek from "../mainInput/belowMainInput/ThinkingBlockPeek";
 import StyledMarkdownPreview from "../StyledMarkdownPreview";
 import ConversationSummary from "./ConversationSummary";
@@ -58,6 +59,12 @@ export default function StepContainer(props: StepContainerProps) {
     }
   }, [props.item.message.content, isStreaming]);
 
+  const messageText = stripImages(props.item.message.content);
+  const showQuestion =
+    !(props.isLast && isStreaming) &&
+    !props.item.toolCallStates?.length &&
+    isAssistantQuestion(messageText);
+
   function onDelete() {
     dispatch(deleteMessage(props.index));
   }
@@ -79,28 +86,44 @@ export default function StepContainer(props: StepContainerProps) {
       <div
         className={`bg-background p-1 px-1.5 ${isBeforeLatestSummary ? "opacity-35" : ""}`}
       >
-        {uiConfig?.displayRawMarkdown ? (
-          <pre className="text-2xs max-w-full overflow-x-auto whitespace-pre-wrap break-words p-4">
-            {renderChatMessage(props.item.message)}
-          </pre>
-        ) : (
-          <>
-            {props.item.reasoning?.text?.trim() && (
-              <ThinkingBlockPeek
-                content={props.item.reasoning.text}
-                index={props.index}
-                prevItem={props.index > 0 ? props.item : null}
-                inProgress={!props.item.reasoning?.endAt}
-              />
-            )}
-
+        {props.item.reasoning?.text?.trim() && !uiConfig?.displayRawMarkdown && (
+          <ThinkingBlockPeek
+            content={props.item.reasoning.text}
+            index={props.index}
+            prevItem={props.index > 0 ? props.item : null}
+            inProgress={!props.item.reasoning?.endAt}
+          />
+        )}
+        <div
+          className={
+            showQuestion
+              ? "border-info my-1 rounded-r border-l-2 px-2 py-1.5"
+              : undefined
+          }
+          style={
+            showQuestion
+              ? {
+                  backgroundColor:
+                    "color-mix(in srgb, var(--vscode-charts-blue, #2196f3) 14%, transparent)",
+                }
+              : undefined
+          }
+        >
+          {showQuestion && (
+            <div className="text-info mb-1 text-xs font-medium">Question</div>
+          )}
+          {uiConfig?.displayRawMarkdown ? (
+            <pre className="text-2xs max-w-full overflow-x-auto whitespace-pre-wrap break-words p-4">
+              {renderChatMessage(props.item.message)}
+            </pre>
+          ) : (
             <StyledMarkdownPreview
               isRenderingInStepContainer
-              source={stripImages(props.item.message.content)}
+              source={messageText}
               itemIndex={props.index}
             />
-          </>
-        )}
+          )}
+        </div>
         {props.isLast && <ThinkingIndicator historyItem={props.item} />}
       </div>
 

@@ -18,10 +18,15 @@ import { streamResponseAfterToolCall } from "./streamResponseAfterToolCall";
 
 export const callToolById = createAsyncThunk<
   void,
-  { toolCallId: string; isAutoApproved?: boolean; depth?: number },
+  {
+    toolCallId: string;
+    isAutoApproved?: boolean;
+    depth?: number;
+    loopNotice?: string;
+  },
   ThunkApiType
 >("chat/callTool", async (inputs, { dispatch, extra, getState }) => {
-  const { toolCallId, isAutoApproved, depth = 0 } = inputs;
+  const { toolCallId, isAutoApproved, depth = 0, loopNotice } = inputs;
 
   const state = getState();
   const toolCallState = findToolCallById(state.session.history, toolCallId);
@@ -94,6 +99,18 @@ export const callToolById = createAsyncThunk<
     streamResponse = true;
   }
 
+  const loopNoticeItems = loopNotice
+    ? [
+        {
+          icon: "problems" as const,
+          name: "Tool loop",
+          description: "Repeated call",
+          content: loopNotice,
+          hidden: false,
+        },
+      ]
+    : [];
+
   if (error) {
     dispatch(
       updateToolCallOutput({
@@ -106,14 +123,15 @@ export const callToolById = createAsyncThunk<
             content: `${toolCallState.toolCall.function.name} failed with the message: ${error.message}\n\nPlease try something else or request further instructions.`,
             hidden: false,
           },
+          ...loopNoticeItems,
         ],
       }),
     );
-  } else if (output?.length) {
+  } else if (output?.length || loopNoticeItems.length) {
     dispatch(
       updateToolCallOutput({
         toolCallId,
-        contextItems: output,
+        contextItems: [...(output ?? []), ...loopNoticeItems],
         mcpUiState,
       }),
     );

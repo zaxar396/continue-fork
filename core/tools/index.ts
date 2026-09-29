@@ -9,7 +9,6 @@ export const getBaseToolDefinitions = () => [
   toolDefinitions.runTerminalCommandTool,
   toolDefinitions.globSearchTool,
   toolDefinitions.viewDiffTool,
-  toolDefinitions.readCurrentlyOpenFileTool,
   toolDefinitions.lsTool,
   toolDefinitions.createRuleBlock,
   toolDefinitions.fetchUrlContentTool,
@@ -38,7 +37,6 @@ export const getConfigDependentToolDefinitions = async (
   if (modelName && isRecommendedAgentModel(modelName)) {
     tools.push(toolDefinitions.multiEditTool);
   } else {
-    tools.push(toolDefinitions.editFileTool);
     tools.push(toolDefinitions.singleFindAndReplaceTool);
   }
 

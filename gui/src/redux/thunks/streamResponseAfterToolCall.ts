@@ -1,10 +1,15 @@
 import { createAsyncThunk, unwrapResult } from "@reduxjs/toolkit";
 import { ChatMessage } from "core";
 import { renderContextItems } from "core/util/messageContent";
+import {
+  EMPTY_TOOL_LOOP,
+  noteToolBatchOutcome,
+} from "core/tools/toolCallLoop";
 import { selectCurrentToolCalls } from "../selectors/selectToolCalls";
 import {
   ChatHistoryItemWithMessageId,
   resetNextCodeBlockToApplyIndex,
+  setToolLoop,
   streamUpdate,
 } from "../slices/sessionSlice";
 import { ThunkApiType } from "../store";
@@ -80,6 +85,19 @@ export const streamResponseAfterToolCall = createAsyncThunk<
             state.config.config.ui?.continueAfterToolRejection,
           )
         ) {
+          const calls = assistantMessage.toolCallStates ?? [];
+          const ok = calls.every((call) => call.status === "done");
+          const output = calls
+            .map((call) => renderContextItems(call.output ?? []))
+            .join("\n");
+          dispatch(
+            setToolLoop(
+              noteToolBatchOutcome(getState().session.toolLoop ?? EMPTY_TOOL_LOOP, {
+                ok,
+                output,
+              }),
+            ),
+          );
           unwrapResult(await dispatch(streamNormalInput({ depth: depth + 1 })));
         }
       }),

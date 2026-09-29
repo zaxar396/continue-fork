@@ -207,7 +207,7 @@ describe("singleFindAndReplaceImpl", () => {
       });
     });
 
-    it("should throw error if old_string appears multiple times and replace_all is false", async () => {
+    it("should throw when old_string appears more than once", async () => {
       mockExtras.ideMessenger.ide.readFile = vi
         .fn()
         .mockResolvedValue("Hello world\nThis is a test file\nGoodbye world");
@@ -216,7 +216,6 @@ describe("singleFindAndReplaceImpl", () => {
         filepath: "file.txt",
         old_string: "world",
         new_string: "universe",
-        replace_all: false,
       };
 
       await expect(
@@ -228,7 +227,31 @@ describe("singleFindAndReplaceImpl", () => {
       );
     });
 
-    it("should replace all occurrences when replace_all is true", async () => {
+    it("applies every replacement in one call, in order", async () => {
+      mockExtras.ideMessenger.ide.readFile = vi
+        .fn()
+        .mockResolvedValue("alpha beta");
+
+      const args = {
+        filepath: "file.txt",
+        replacements: [
+          { old_string: "alpha", new_string: "ALPHA" },
+          { old_string: "beta", new_string: "BETA" },
+        ],
+      };
+
+      await singleFindAndReplaceImpl(args, "tool-call-id", mockExtras);
+
+      expect(mockApplyForEditTool).toHaveBeenCalledWith({
+        streamId: "test-uuid",
+        toolCallId: "tool-call-id",
+        text: "ALPHA BETA",
+        filepath: "/test/file.txt",
+        isSearchAndReplace: true,
+      });
+    });
+
+    it("should still require a unique match when replace_all is sent", async () => {
       mockExtras.ideMessenger.ide.readFile = vi
         .fn()
         .mockResolvedValue("Hello world\nThis is a test file\nGoodbye world");
@@ -240,15 +263,13 @@ describe("singleFindAndReplaceImpl", () => {
         replace_all: true,
       };
 
-      await singleFindAndReplaceImpl(args, "tool-call-id", mockExtras);
-
-      expect(mockApplyForEditTool).toHaveBeenCalledWith({
-        streamId: "test-uuid",
-        toolCallId: "tool-call-id",
-        text: "Hello universe\nThis is a test file\nGoodbye universe",
-        filepath: "/test/file.txt",
-        isSearchAndReplace: true,
-      });
+      await expect(
+        singleFindAndReplaceImpl(args, "tool-call-id", mockExtras),
+      ).rejects.toThrowError(
+        expect.objectContaining({
+          reason: ContinueErrorReason.FindAndReplaceMultipleOccurrences,
+        }),
+      );
     });
 
     it("should handle empty new_string (deletion)", async () => {

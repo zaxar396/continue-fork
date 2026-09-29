@@ -358,7 +358,10 @@ const getCommandsMap: (
       consoleView.clearLog();
     },
     "continue.viewLogs": async () => {
-      vscode.commands.executeCommand("workbench.action.toggleDevTools");
+      const { showContinueOutputChannel } = await import(
+        "./continueOutputChannel"
+      );
+      showContinueOutputChannel();
     },
     "continue.debugTerminal": async () => {
       const terminalContents = await ide.getTerminalContents();

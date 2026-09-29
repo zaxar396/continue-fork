@@ -4,6 +4,7 @@ import { ConfigHandler } from "../config/ConfigHandler";
 import { FromCoreProtocol, ToCoreProtocol } from "../protocol";
 import { IMessenger, Message } from "../protocol/messenger";
 
+import { errorText, outputLog } from "../util/outputLog";
 import { TTS } from "../util/tts";
 
 export async function* llmStreamChat(
@@ -47,6 +48,15 @@ export async function* llmStreamChat(
       model: model?.model,
     },
   };
+
+  outputLog("request", {
+    model: model.title ?? model.model,
+    provider: model.underlyingProviderName,
+    messages: messages.length,
+  });
+  const startedAt = Date.now();
+  let chunks = 0;
+  const roles = new Set<string>();
 
   try {
     if (legacySlashCommandData) {
@@ -99,6 +109,8 @@ export async function* llmStreamChat(
           break;
         }
         if (next.value) {
+          chunks += 1;
+          roles.add("assistant");
           yield {
             role: "assistant",
             content: next.value,
@@ -110,6 +122,13 @@ export async function* llmStreamChat(
         throw new Error("Will never happen");
       }
 
+      outputLog("response", {
+        model: model.title ?? model.model,
+        ms: Date.now() - startedAt,
+        chunks,
+        roles: [...roles],
+        cancelled: abortController.signal.aborted,
+      });
       return next.value;
     } else {
       const gen = model.streamChat(
@@ -126,6 +145,10 @@ export async function* llmStreamChat(
         }
 
         const chunk = next.value;
+        chunks += 1;
+        if (chunk && typeof chunk === "object" && "role" in chunk) {
+          roles.add(String(chunk.role));
+        }
 
         yield chunk;
         next = await gen.next();
@@ -138,10 +161,22 @@ export async function* llmStreamChat(
         throw new Error("Will never happen");
       }
 
+      outputLog("response", {
+        model: model.title ?? model.model,
+        ms: Date.now() - startedAt,
+        chunks,
+        roles: [...roles],
+        cancelled: abortController.signal.aborted,
+      });
       return next.value;
     }
   } catch (error) {
-    // Moved error handling that was here to GUI, keeping try/catch for clean diff
+    outputLog("error", {
+      where: "llm/streamChat",
+      model: model.title ?? model.model,
+      message: errorText(error),
+      cancelled: abortController.signal.aborted,
+    });
     throw error;
   }
 }

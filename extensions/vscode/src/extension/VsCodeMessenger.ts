@@ -369,7 +369,7 @@ export class VsCodeMessenger {
       return await ide.saveFile(msg.data.filepath);
     });
     this.onWebviewOrCore("readFile", async (msg) => {
-      return await ide.readFile(msg.data.filepath);
+      return await ide.readFile(msg.data.filepath, msg.data.full);
     });
     this.onWebviewOrCore("openUrl", (msg) => {
       vscode.env.openExternal(vscode.Uri.parse(msg.data));

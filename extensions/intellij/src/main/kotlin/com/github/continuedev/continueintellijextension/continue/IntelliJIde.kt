@@ -345,8 +345,8 @@ class IntelliJIDE(
             fileUtils.saveFile(filepath)
         }
 
-    override suspend fun readFile(filepath: String): String =
-        fileUtils.readFile(filepath)
+    override suspend fun readFile(filepath: String, full: Boolean = false): String =
+        fileUtils.readFile(filepath, if (full) Int.MAX_VALUE else 100_000)
 
     override suspend fun readRangeInFile(filepath: String, range: Range): String {
         val fullContents = readFile(filepath)

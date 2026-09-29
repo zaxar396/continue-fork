@@ -134,7 +134,7 @@ export class ReverseMessageIde {
     });
 
     this.on("readFile", (data) => {
-      return this.ide.readFile(data.filepath);
+      return this.ide.readFile(data.filepath, data.full);
     });
 
     this.on("getOpenFiles", () => {

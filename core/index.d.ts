@@ -879,7 +879,7 @@ export interface IDE {
 
   saveFile(fileUri: string): Promise<void>;
 
-  readFile(fileUri: string): Promise<string>;
+  readFile(fileUri: string, full?: boolean): Promise<string>;
 
   readRangeInFile(fileUri: string, range: Range): Promise<string>;
 
@@ -1458,6 +1458,10 @@ export interface ContinueUIConfig {
   codeWrap?: boolean;
   showSessionTabs?: boolean;
   continueAfterToolRejection?: boolean;
+  /** When false, the chat does not summarize history as the context fills. Defaults to enabled. */
+  autoCompactContext?: boolean;
+  /** When true, chat requests and model responses are appended to .continue/logs/llm.log. */
+  logLlmTraffic?: boolean;
 }
 
 export interface ContextMenuConfig {
@@ -1957,6 +1961,8 @@ export interface CompiledMessagesResult {
   compiledChatMessages: ChatMessage[];
   didPrune: boolean;
   contextPercentage: number;
+  inputTokens?: number;
+  contextLength?: number;
 }
 
 export interface AddToChatPayload {

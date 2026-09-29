@@ -1,15 +1,92 @@
 import { Tool } from "../..";
 import { validateSingleEdit } from "../../edit/searchAndReplace/findAndReplaceUtils";
-import { executeFindAndReplace } from "../../edit/searchAndReplace/performReplace";
+import { executeMultiFindAndReplace } from "../../edit/searchAndReplace/performReplace";
 import { validateSearchAndReplaceFilepath } from "../../edit/searchAndReplace/validateArgs";
+import { ContinueError, ContinueErrorReason } from "../../util/errors";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "../builtIn";
-import { NO_PARALLEL_TOOL_CALLING_INSTRUCTION } from "./editFile";
+import { EditOperation } from "./multiEdit";
+
+export interface SingleFindReplacement {
+  old_string: string;
+  new_string: string;
+}
 
 export interface SingleFindAndReplaceArgs {
   filepath: string;
-  old_string: string;
-  new_string: string;
-  replace_all?: boolean;
+  replacements: SingleFindReplacement[];
+}
+
+export function schemaArgsForSingleFind(
+  args: Record<string, unknown>,
+): Record<string, unknown> {
+  if (Array.isArray(args.replacements)) {
+    return args;
+  }
+  if (!("old_string" in args) && !("new_string" in args)) {
+    return args;
+  }
+  return {
+    ...args,
+    replacements: [
+      {
+        old_string: args.old_string,
+        new_string: args.new_string,
+      },
+    ],
+  };
+}
+
+export function editsFromSingleFindArgs(
+  args: Record<string, unknown>,
+): EditOperation[] {
+  if ("replacements" in args && args.replacements !== undefined) {
+    if (!Array.isArray(args.replacements)) {
+      throw new ContinueError(
+        ContinueErrorReason.MultiEditEditsArrayRequired,
+        "replacements must be an array",
+      );
+    }
+    if (args.replacements.length === 0) {
+      throw new ContinueError(
+        ContinueErrorReason.MultiEditEditsArrayEmpty,
+        "replacements must contain at least one edit",
+      );
+    }
+    return args.replacements.map((item, index) => {
+      const edit = item as { old_string?: unknown; new_string?: unknown };
+      const { oldString, newString } = validateSingleEdit(
+        edit?.old_string,
+        edit?.new_string,
+        undefined,
+        index,
+      );
+      return {
+        old_string: oldString,
+        new_string: newString,
+        replace_all: false,
+      };
+    });
+  }
+
+  if ("old_string" in args || "new_string" in args) {
+    const { oldString, newString } = validateSingleEdit(
+      args.old_string,
+      args.new_string,
+      undefined,
+    );
+    return [
+      {
+        old_string: oldString,
+        new_string: newString,
+        replace_all: false,
+      },
+    ];
+  }
+
+  throw new ContinueError(
+    ContinueErrorReason.MultiEditEditsArrayRequired,
+    "replacements is required",
+  );
 }
 
 export const singleFindAndReplaceTool: Tool = {
@@ -27,74 +104,77 @@ export const singleFindAndReplaceTool: Tool = {
 
 IMPORTANT:
 - ALWAYS use the \`${BuiltInToolNames.ReadFile}\` tool just before making edits, to understand the file's up-to-date contents and context. The user can also edit the file while you are working with it.
-- ${NO_PARALLEL_TOOL_CALLING_INSTRUCTION}
+- Pass every replacement already known for this file in the replacements array of this one call. One item is enough. Do not list the replacements in prose first.
 - When editing text from \`${BuiltInToolNames.ReadFile}\` tool output, ensure you preserve exact whitespace/indentation.
 - Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.
-- Use \`replace_all\` for replacing and renaming strings across the file. This parameter is useful if you want to rename a variable, for instance.
+- Each old_string must match exactly once. If it appears more than once, include more surrounding lines in that same item until it is unique.
 
 WARNINGS:
-- When not using \`replace_all\`, the edit will FAIL if \`old_string\` is not unique in the file. Either provide a larger string with more surrounding context to make it unique or use \`replace_all\` to change every instance of \`old_string\`.
+- The edit will FAIL if an old_string is not unique in the file at the moment that item is applied. Widen it with surrounding context and call again.
 - The edit will likely fail if you have not recently used the \`${BuiltInToolNames.ReadFile}\` tool to view up-to-date file contents.`,
     parameters: {
       type: "object",
-      required: ["filepath", "old_string", "new_string"],
+      required: ["filepath", "replacements"],
       properties: {
         filepath: {
           type: "string",
           description:
             "The path to the file to modify, relative to the root of the workspace",
         },
-        old_string: {
-          type: "string",
+        replacements: {
+          type: "array",
           description:
-            "The text to replace - must be exact including whitespace/indentation",
-        },
-        new_string: {
-          type: "string",
-          description:
-            "The text to replace it with (MUST be different from old_string)",
-        },
-        replace_all: {
-          type: "boolean",
-          description: "Replace all occurrences of old_string (default false)",
+            "Every replacement already known for this file, applied in order. Use one item when there is only one change.",
+          items: {
+            type: "object",
+            required: ["old_string", "new_string"],
+            properties: {
+              old_string: {
+                type: "string",
+                description:
+                  "The text to replace. It must match exactly once, including whitespace and indentation.",
+              },
+              new_string: {
+                type: "string",
+                description:
+                  "The text to replace it with. It must differ from old_string.",
+              },
+            },
+          },
         },
       },
     },
   },
   systemMessageDescription: {
-    prefix: `To perform exact string replacements in files, use the ${BuiltInToolNames.SingleFindAndReplace} tool with a filepath (relative to the root of the workspace) and the strings to find and replace.
+    prefix: `To perform exact string replacements in a file, use the ${BuiltInToolNames.SingleFindAndReplace} tool with a filepath (relative to the root of the workspace) and a replacements array. Put every known replacement for that file in the same call.
 
   For example, you could respond with:`,
     exampleArgs: [
       ["filepath", "path/to/file.ts"],
-      ["old_string", "const oldVariable = 'value'"],
-      ["new_string", "const newVariable = 'updated'"],
-      ["replace_all", "false"],
+      [
+        "replacements",
+        `[{ "old_string": "const oldVariable = 'value'", "new_string": "const newVariable = 'updated'" }]`,
+      ],
     ],
   },
   defaultToolPolicy: "allowedWithoutPermission",
   preprocessArgs: async (args, extras) => {
-    const { oldString, newString, replaceAll } = validateSingleEdit(
-      args.old_string,
-      args.new_string,
-      args.replace_all,
-    );
+    const edits = editsFromSingleFindArgs(args);
     const fileUri = await validateSearchAndReplaceFilepath(
       args.filepath,
       extras.ide,
     );
 
     const editingFileContents = await extras.ide.readFile(fileUri);
-    const newFileContents = executeFindAndReplace(
+    const newFileContents = executeMultiFindAndReplace(
       editingFileContents,
-      oldString,
-      newString,
-      replaceAll ?? false,
-      0,
+      edits,
+      false,
     );
 
     return {
       ...args,
+      edits,
       fileUri,
       editingFileContents,
       newFileContents,

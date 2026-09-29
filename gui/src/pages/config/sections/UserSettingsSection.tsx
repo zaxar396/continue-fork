@@ -50,6 +50,8 @@ export function UserSettingsSection() {
   const showSessionTabs = config.ui?.showSessionTabs ?? false;
   const continueAfterToolRejection =
     config.ui?.continueAfterToolRejection ?? false;
+  const autoCompactContext = config.ui?.autoCompactContext !== false;
+  const logLlmTraffic = config.ui?.logLlmTraffic === true;
   const codeWrap = config.ui?.codeWrap ?? false;
   const showChatScrollbar = config.ui?.showChatScrollbar ?? false;
   const readResponseTTS = config.experimental?.readResponseTTS ?? false;
@@ -124,6 +126,22 @@ export function UserSettingsSection() {
                   description="Reads LLM responses aloud with TTS."
                   value={readResponseTTS}
                   onChange={(value) => handleUpdate({ readResponseTTS: value })}
+                />
+                <UserSetting
+                  type="toggle"
+                  title="Auto-compact context"
+                  description="Summarizes earlier messages when the chat reaches 80% of the input budget, so the conversation can continue."
+                  value={autoCompactContext}
+                  onChange={(value) =>
+                    handleUpdate({ autoCompactContext: value })
+                  }
+                />
+                <UserSetting
+                  type="toggle"
+                  title="Log model requests"
+                  description="Appends each chat request and the model response to .continue/logs/llm.log."
+                  value={logLlmTraffic}
+                  onChange={(value) => handleUpdate({ logLlmTraffic: value })}
                 />
                 <UserSetting
                   type="toggle"

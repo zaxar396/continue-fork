@@ -34,6 +34,10 @@ import {
 import { findUriInDirs, getUriPathBasename } from "core/util/uri";
 import { findLastIndex } from "lodash";
 import { v4 as uuidv4 } from "uuid";
+import {
+  EMPTY_TOOL_LOOP,
+  type ToolLoopState,
+} from "core/tools/toolCallLoop";
 import { type InlineErrorMessageType } from "../../components/mainInput/InlineErrorMessage";
 import { toolCallCtxItemToCtxItemWithId } from "../../pages/gui/ToolCallDiv/utils";
 import { addToolCallDeltaToState, isEditTool } from "../../util/toolCallState";
@@ -221,8 +225,11 @@ type SessionState = {
   hasReasoningEnabled?: boolean;
   isPruned?: boolean;
   contextPercentage?: number;
+  contextInputTokens?: number;
+  contextLength?: number;
   inlineErrorMessage?: InlineErrorMessageType;
   compactionLoading: Record<number, boolean>; // Track compaction loading by message index
+  toolLoop: ToolLoopState;
 };
 
 export const INITIAL_SESSION_STATE: SessionState = {
@@ -243,6 +250,7 @@ export const INITIAL_SESSION_STATE: SessionState = {
   lastSessionId: undefined,
   newestToolbarPreviewForInput: {},
   compactionLoading: {},
+  toolLoop: EMPTY_TOOL_LOOP,
 };
 
 export const sessionSlice = createSlice({
@@ -411,6 +419,25 @@ export const sessionSlice = createSlice({
 
       state.isStreaming = true;
     },
+    appendLoopResume: (state, action: PayloadAction<string>) => {
+      state.history.push({
+        message: {
+          id: uuidv4(),
+          role: "user",
+          content: action.payload,
+        },
+        contextItems: [],
+      });
+      state.history.push({
+        message: {
+          id: uuidv4(),
+          role: "assistant",
+          content: "",
+        },
+        contextItems: [],
+      });
+      state.isStreaming = true;
+    },
     truncateHistoryToMessage: (
       state,
       {
@@ -434,6 +461,8 @@ export const sessionSlice = createSlice({
         state.inlineErrorMessage = undefined;
         state.isPruned = false;
         state.contextPercentage = undefined;
+        state.contextInputTokens = undefined;
+        state.contextLength = undefined;
       }
     },
     deleteMessage: (state, action: PayloadAction<number>) => {
@@ -442,6 +471,8 @@ export const sessionSlice = createSlice({
       state.inlineErrorMessage = undefined;
       state.isPruned = false;
       state.contextPercentage = undefined;
+      state.contextInputTokens = undefined;
+      state.contextLength = undefined;
     },
     deleteCompaction: (state, action: PayloadAction<number>) => {
       // Removes the conversation summary from the specified message
@@ -695,6 +726,9 @@ export const sessionSlice = createSlice({
       state.inlineErrorMessage = undefined;
       state.isPruned = false;
       state.contextPercentage = undefined;
+      state.contextInputTokens = undefined;
+      state.contextLength = undefined;
+      state.toolLoop = EMPTY_TOOL_LOOP;
 
       if (payload) {
         state.history = payload.history as any;
@@ -998,6 +1032,9 @@ export const sessionSlice = createSlice({
         delete state.compactionLoading[index];
       }
     },
+    setToolLoop: (state, action: PayloadAction<ToolLoopState>) => {
+      state.toolLoop = action.payload;
+    },
     setInlineErrorMessage: (
       state,
       action: PayloadAction<SessionState["inlineErrorMessage"]>,
@@ -1009,6 +1046,13 @@ export const sessionSlice = createSlice({
     },
     setContextPercentage: (state, action: PayloadAction<number>) => {
       state.contextPercentage = action.payload;
+    },
+    setContextUsage: (
+      state,
+      action: PayloadAction<{ inputTokens: number; contextLength: number }>,
+    ) => {
+      state.contextInputTokens = action.payload.inputTokens;
+      state.contextLength = action.payload.contextLength;
     },
   },
   selectors: {
@@ -1069,6 +1113,7 @@ export const {
   addPromptCompletionPair,
   setActive,
   submitEditorAndInitAtIndex,
+  appendLoopResume,
   truncateHistoryToMessage,
   updateHistoryItemAtIndex,
   clearDanglingMessages,
@@ -1096,8 +1141,10 @@ export const {
   setIsInEdit,
   setHasReasoningEnabled,
   setInlineErrorMessage,
+  setToolLoop,
   setIsPruned,
   setContextPercentage,
+  setContextUsage,
   setCompactionLoading,
   setConversationSummary,
 } = sessionSlice.actions;

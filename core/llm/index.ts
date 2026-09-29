@@ -31,6 +31,7 @@ import {
   ToolOverride,
   Usage,
 } from "../index.js";
+import { logLlmRequest, logLlmResponse } from "./llmTrafficLog.js";
 import { isAbortError } from "../util/isAbortError.js";
 import { isLemonadeInstalled } from "../util/lemonadeHelper.js";
 import { Logger } from "../util/Logger.js";
@@ -1171,9 +1172,16 @@ export abstract class BaseLLM implements ILLM {
     const completion: string[] = [];
     let usage: Usage | undefined = undefined;
     let citations: null | string[] = null;
+    let trafficId: string | undefined;
+    let trafficError: unknown;
 
     try {
       if (this.templateMessages) {
+        trafficId = logLlmRequest({
+          model: completionOptions.model,
+          provider: this.providerName,
+          request: prompt,
+        });
         for await (const chunk of this._streamComplete(
           prompt,
           signal,
@@ -1194,6 +1202,14 @@ export abstract class BaseLLM implements ILLM {
             includeReasoningContentField: this.supportsReasoningContentField,
           });
           body = this.modifyChatBody(body);
+          trafficId = logLlmRequest({
+            model: completionOptions.model,
+            provider: this.providerName,
+            request: {
+              ...body,
+              ...(this.requestOptions?.extraBodyProperties ?? {}),
+            },
+          });
 
           if (logEnabled) {
             interaction?.logItem({
@@ -1250,6 +1266,15 @@ export abstract class BaseLLM implements ILLM {
             }
           }
 
+          trafficId = logLlmRequest({
+            model: completionOptions.model,
+            provider: this.providerName,
+            request: {
+              messages,
+              options: completionOptions,
+              ...(this.requestOptions?.extraBodyProperties ?? {}),
+            },
+          });
           for await (const chunk of this._streamChat(
             messages,
             signal,
@@ -1295,6 +1320,7 @@ export abstract class BaseLLM implements ILLM {
         templateMessages: !!this.templateMessages,
       });
 
+      trafficError = e;
       status = this._logEnd(
         completionOptions.model,
         prompt,
@@ -1306,6 +1332,12 @@ export abstract class BaseLLM implements ILLM {
       );
       throw e;
     } finally {
+      logLlmResponse({
+        id: trafficId,
+        response: completion.join(""),
+        thinking: thinking.join(""),
+        error: trafficError,
+      });
       if (status === "in_progress") {
         this._logEnd(
           completionOptions.model,

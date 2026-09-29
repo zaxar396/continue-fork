@@ -1,4 +1,6 @@
 import { Tool, ToolCallState } from "core";
+import { BuiltInToolNames } from "core/tools/builtIn";
+import { schemaArgsForSingleFind } from "core/tools/definitions/singleFindAndReplace";
 import {
   collectSchemaViolations,
   formatInvalidArgs,
@@ -83,7 +85,9 @@ export async function preprocessToolCalls(
       }
 
       const violations = collectSchemaViolations(
-        parsed.args,
+        toolName === BuiltInToolNames.SingleFindAndReplace
+          ? schemaArgsForSingleFind(parsed.args)
+          : parsed.args,
         tool.function.parameters,
       );
       if (violations.length > 0) {

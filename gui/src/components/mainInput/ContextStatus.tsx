@@ -16,6 +16,10 @@ const ContextStatus = () => {
   const previousSelectedChatModel = useRef<string | null>(null);
   const history = useAppSelector((state) => state.session.history);
   const percent = Math.round((contextPercentage ?? 0) * 100);
+  const contextInputTokens = useAppSelector(
+    (state) => state.session.contextInputTokens,
+  );
+  const contextLength = useAppSelector((state) => state.session.contextLength);
   const isPruned = useAppSelector((state) => state.session.isPruned);
 
   const isDifferentModelAndSameHistory = useMemo(() => {
@@ -30,16 +34,24 @@ const ContextStatus = () => {
   }, [history.length, selectedChatModel]);
 
   const compactConversation = useCompactConversation();
-  if (!isPruned && percent < 60) {
-    return null;
-  }
 
   // if user changed to a different model, we shouldn't show the context status until the user sends a new message
   if (isDifferentModelAndSameHistory) {
     return null;
   }
 
-  const barColorClass = isPruned ? "bg-error" : "bg-description";
+  const tone =
+    isPruned || percent >= 80
+      ? "text-red-400"
+      : percent >= 60
+        ? "text-yellow-500"
+        : "text-description";
+  const ring = 14;
+  const stroke = 2;
+  const radius = (ring - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const filled = Math.max(0, Math.min(100, percent));
+  const dash = (filled / 100) * circumference;
 
   return (
     <div>
@@ -54,7 +66,9 @@ const ContextStatus = () => {
         content={
           <div className="flex flex-col gap-0 text-left text-xs">
             <span className="inline-block">
-              {`${percent}% of context filled.`}
+              {contextInputTokens !== undefined && contextLength
+                ? `${contextInputTokens.toLocaleString()} / ${contextLength.toLocaleString()} tokens`
+                : `${percent}% of context filled.`}
             </span>
             {isPruned && (
               <span className="inline-block">
@@ -90,11 +104,35 @@ const ContextStatus = () => {
           </div>
         }
       >
-        <div className="border-command-border relative h-[14px] w-[7px] rounded-[1px] border-[0.5px] border-solid md:h-[10px] md:w-[5px]">
-          <div
-            className={`transition-height absolute bottom-0 left-0 w-full duration-300 ease-in-out ${barColorClass}`}
-            style={{ height: `${percent}%` }}
-          />
+        <div className={`flex items-center gap-1 ${tone}`}>
+          <svg
+            width={ring}
+            height={ring}
+            viewBox={`0 0 ${ring} ${ring}`}
+            aria-hidden="true"
+          >
+            <circle
+              cx={ring / 2}
+              cy={ring / 2}
+              r={radius}
+              fill="none"
+              stroke="currentColor"
+              strokeOpacity={0.25}
+              strokeWidth={stroke}
+            />
+            <circle
+              cx={ring / 2}
+              cy={ring / 2}
+              r={radius}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={stroke}
+              strokeDasharray={`${dash} ${circumference}`}
+              strokeLinecap="round"
+              transform={`rotate(-90 ${ring / 2} ${ring / 2})`}
+            />
+          </svg>
+          <span>{percent}%</span>
         </div>
       </ToolTip>
     </div>

@@ -46,7 +46,7 @@ class BinaryIdeHandler {
     h["getIdeSettings"] = () => ide.getIdeSettings();
     h["getControlPlaneSessionInfo"] = () => undefined;
     h["getWorkspaceDirs"] = () => ide.getWorkspaceDirs();
-    h["readFile"] = (d) => ide.readFile(d.filepath);
+    h["readFile"] = (d) => ide.readFile(d.filepath, d.full);
     h["writeFile"] = (d) => ide.writeFile(d.path, d.contents);
     h["fileExists"] = (d) => ide.fileExists(d.filepath);
     h["showLines"] = (d) => ide.showLines(d.filepath, d.startLine, d.endLine);

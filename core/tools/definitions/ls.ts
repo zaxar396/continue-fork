@@ -20,7 +20,8 @@ export const lsTool: Tool = {
   group: BUILT_IN_GROUP_NAME,
   function: {
     name: BuiltInToolNames.LSTool,
-    description: "List files and folders in a given directory",
+    description:
+      "List one directory when a file path is not yet known. If the path is already known, use read_file.",
     parameters: {
       type: "object",
       properties: {

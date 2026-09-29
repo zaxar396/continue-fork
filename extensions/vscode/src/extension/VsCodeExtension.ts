@@ -5,6 +5,7 @@ import { IContextProvider } from "core";
 import { ConfigHandler } from "core/config/ConfigHandler";
 import { EXTENSION_NAME } from "core/util/constants";
 import { Core } from "core/core";
+import { getContinueOutputChannel } from "../continueOutputChannel";
 import { FromCoreProtocol, ToCoreProtocol } from "core/protocol";
 import { InProcessMessenger } from "core/protocol/messenger";
 import {
@@ -278,6 +279,7 @@ export class VsCodeExtension {
       this,
     );
 
+    context.subscriptions.push(getContinueOutputChannel());
     this.core = new Core(inProcessMessenger, this.ide);
     this.configHandler = this.core.configHandler;
     resolveConfigHandler?.(this.configHandler);

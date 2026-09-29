@@ -8,17 +8,33 @@ import {
   toMalformedResponseError,
   isMalformedStreamError,
 } from "core/tools/toolCallValidity";
+import {
+  EMPTY_TOOL_LOOP,
+  INTENT_LOOP_STOP,
+  TEXT_LOOP_STOP,
+  TOOL_LOOP_STOP,
+  currentReplyWithoutTools,
+  isIntentNarration,
+  isRepeatedPhrase,
+  LOOP_RESUME_INSTRUCTION,
+  PHRASE_LOOP_RESUME,
+  turnSpokenText,
+  noteAgentProgress,
+} from "core/tools/toolCallLoop";
 import { selectActiveTools } from "../selectors/selectActiveTools";
 import { selectSelectedChatModel } from "../slices/configSlice";
 import {
   abortStream,
   addPromptCompletionPair,
+  appendLoopResume,
   errorToolCall,
   setActive,
   setAppliedRulesAtIndex,
   setContextPercentage,
+  setContextUsage,
   setInactive,
   setInlineErrorMessage,
+  setToolLoop,
   setIsPruned,
   setToolGenerated,
   streamUpdate,
@@ -81,12 +97,13 @@ export const streamNormalInput = createAsyncThunk<
   {
     legacySlashCommandData?: ToCoreProtocol["llm/streamChat"][0]["legacySlashCommandData"];
     depth?: number;
+    loopResumed?: boolean;
   },
   ThunkApiType
 >(
   "chat/streamNormalInput",
   async (
-    { legacySlashCommandData, depth = 0 },
+    { legacySlashCommandData, depth = 0, loopResumed = false },
     { dispatch, extra, getState },
   ) => {
     if (process.env.NODE_ENV === "test" && depth > 50) {
@@ -94,6 +111,89 @@ export const streamNormalInput = createAsyncThunk<
       console.error(message, JSON.stringify(getState(), null, 2));
       throw new Error(message);
     }
+    if (depth === 0) {
+      dispatch(setToolLoop(EMPTY_TOOL_LOOP));
+    }
+
+    const resumeAfterLoop = async (
+      instruction: string = LOOP_RESUME_INSTRUCTION,
+    ) => {
+      if (loopResumed) {
+        dispatch(setInactive());
+        return;
+      }
+      dispatch(appendLoopResume(instruction));
+      unwrapResult(
+        await dispatch(streamNormalInput({ depth: 0, loopResumed: true })),
+      );
+    };
+
+    const executeAutoTools = async (
+      calls: {
+        toolCallId: string;
+        toolCall: { function: { name: string; arguments?: string } };
+      }[],
+    ) => {
+      const history = getState().session.history;
+      const assistantText = [...history]
+        .reverse()
+        .find(
+          (item) =>
+            item.message.role === "assistant" &&
+            item.toolCallStates?.some((toolCall) =>
+              calls.some((call) => call.toolCallId === toolCall.toolCallId),
+            ),
+        );
+      const text =
+        typeof assistantText?.message.content === "string"
+          ? assistantText.message.content
+          : "";
+      const noted = noteAgentProgress(
+        getState().session.toolLoop ?? EMPTY_TOOL_LOOP,
+        {
+          calls: calls.map((call) => ({
+            name: call.toolCall.function.name,
+            arguments: call.toolCall.function.arguments ?? "",
+          })),
+          assistantText: text,
+        },
+      );
+      dispatch(setToolLoop(noted.state));
+      if (noted.action === "stop") {
+        for (const call of calls) {
+          dispatch(
+            errorToolCall({
+              toolCallId: call.toolCallId,
+              output: [
+                {
+                  icon: "problems",
+                  name: "Tool loop",
+                  description: "Stopped",
+                  content: noted.notice ?? TOOL_LOOP_STOP,
+                  hidden: false,
+                },
+              ],
+            }),
+          );
+        }
+        await resumeAfterLoop();
+        return;
+      }
+      await Promise.all(
+        calls.map(async (call) => {
+          unwrapResult(
+            await dispatch(
+              callToolById({
+                toolCallId: call.toolCallId,
+                isAutoApproved: true,
+                depth: depth + 1,
+                loopNotice: noted.action === "warn" ? noted.notice : undefined,
+              }),
+            ),
+          );
+        }),
+      );
+    };
     const state = getState();
     const selectedChatModel = selectSelectedChatModel(state);
 
@@ -197,7 +297,10 @@ export const streamNormalInput = createAsyncThunk<
       precompiledRes.status === "error" &&
       precompiledRes.error.includes("Not enough context");
 
+    const autoCompactEnabled =
+      getState().config.config.ui?.autoCompactContext !== false;
     if (
+      autoCompactEnabled &&
       shouldAutoCompactContext({
         notEnoughContext,
         didPrune:
@@ -241,11 +344,19 @@ export const streamNormalInput = createAsyncThunk<
       }
     }
 
-    const { compiledChatMessages, didPrune, contextPercentage } =
-      precompiledRes.content;
+    const {
+      compiledChatMessages,
+      didPrune,
+      contextPercentage,
+      inputTokens,
+      contextLength,
+    } = precompiledRes.content;
 
     dispatch(setIsPruned(didPrune));
     dispatch(setContextPercentage(contextPercentage));
+    if (inputTokens !== undefined && contextLength !== undefined) {
+      dispatch(setContextUsage({ inputTokens, contextLength }));
+    }
 
     const start = Date.now();
     const streamAborter = state.session.streamAborter;
@@ -276,6 +387,22 @@ export const streamNormalInput = createAsyncThunk<
         }
 
         dispatch(streamUpdate(next.value));
+        const history = getState().session.history;
+        const intentLoop = isIntentNarration(currentReplyWithoutTools(history));
+        const phraseLoop = isRepeatedPhrase(turnSpokenText(history));
+        if (intentLoop || phraseLoop) {
+          dispatch(
+            streamUpdate([
+              {
+                role: "assistant",
+                content: `\n\n${intentLoop ? INTENT_LOOP_STOP : TEXT_LOOP_STOP}`,
+              },
+            ]),
+          );
+          dispatch(abortStream());
+          await resumeAfterLoop(PHRASE_LOOP_RESUME);
+          return;
+        }
         next = await gen.next();
       }
 
@@ -418,18 +545,8 @@ export const streamNormalInput = createAsyncThunk<
         if (streamAborter.signal.aborted || !state4.session.isStreaming) {
           return;
         }
-        await Promise.all(
-          builtInReadonlyAutoApproved.map(async ({ toolCallState }) => {
-            unwrapResult(
-              await dispatch(
-                callToolById({
-                  toolCallId: toolCallState.toolCallId,
-                  isAutoApproved: true,
-                  depth: depth + 1,
-                }),
-              ),
-            );
-          }),
+        await executeAutoTools(
+          builtInReadonlyAutoApproved.map(({ toolCallState }) => toolCallState),
         );
       }
 
@@ -442,19 +559,7 @@ export const streamNormalInput = createAsyncThunk<
         return;
       }
       if (generatedCalls4.length > 0) {
-        await Promise.all(
-          generatedCalls4.map(async ({ toolCallId }) => {
-            unwrapResult(
-              await dispatch(
-                callToolById({
-                  toolCallId,
-                  isAutoApproved: true,
-                  depth: depth + 1,
-                }),
-              ),
-            );
-          }),
-        );
+        await executeAutoTools(generatedCalls4);
       } else {
         const anchor = originalToolCalls[originalToolCalls.length - 1];
         unwrapResult(

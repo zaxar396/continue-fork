@@ -192,7 +192,7 @@ interface IDE {
 
     suspend fun saveFile(filepath: String)
 
-    suspend fun readFile(filepath: String): String
+    suspend fun readFile(filepath: String, full: Boolean = false): String
 
     suspend fun readRangeInFile(filepath: String, range: Range): String
 

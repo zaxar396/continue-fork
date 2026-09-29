@@ -36,13 +36,23 @@ function FunctionSpecificToolCallDiv({
         />
       );
     case BuiltInToolNames.SingleFindAndReplace:
-      const edits: EditOperation[] = [
-        {
-          old_string: processedArgs?.old_string ?? args?.old_string ?? "",
-          new_string: processedArgs?.new_string ?? args?.new_string ?? "",
-          replace_all: processedArgs?.replace_all ?? args?.replace_all,
-        },
-      ];
+      const replacementSource = Array.isArray(processedArgs?.edits)
+        ? processedArgs.edits
+        : Array.isArray(args?.replacements)
+          ? args.replacements
+          : [
+              {
+                old_string: processedArgs?.old_string ?? args?.old_string ?? "",
+                new_string: processedArgs?.new_string ?? args?.new_string ?? "",
+              },
+            ];
+      const edits: EditOperation[] = replacementSource.map(
+        (edit: EditOperation) => ({
+          old_string: edit?.old_string ?? "",
+          new_string: edit?.new_string ?? "",
+          replace_all: false,
+        }),
+      );
       return (
         <FindAndReplaceDisplay
           editingFileContents={processedArgs?.editingFileContents}

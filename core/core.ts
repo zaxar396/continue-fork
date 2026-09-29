@@ -76,6 +76,7 @@ import { shouldIgnore } from "./indexing/shouldIgnore";
 import { walkDirCache } from "./indexing/walkDir";
 import { LLMLogger } from "./llm/logger";
 import { llmStreamChat } from "./llm/streamChat";
+import { errorText, outputLog } from "./util/outputLog";
 import { BeforeAfterDiff } from "./nextEdit/context/diffFormatting";
 import { processSmallEdit } from "./nextEdit/context/processSmallEdit";
 import { PrefetchQueue } from "./nextEdit/NextEditPrefetchQueue";
@@ -598,7 +599,23 @@ export class Core {
         throw new Error("No chat model selected");
       }
 
-      return model.compileChatMessages(messages, options);
+      try {
+        const compiled = await model.compileChatMessages(messages, options);
+        outputLog("context", {
+          model: model.title ?? model.model,
+          percent: Math.round((compiled.contextPercentage ?? 0) * 100),
+          pruned: compiled.didPrune,
+          messages: compiled.compiledChatMessages?.length,
+        });
+        return compiled;
+      } catch (error) {
+        outputLog("error", {
+          where: "llm/compileChat",
+          model: model.title ?? model.model,
+          message: errorText(error),
+        });
+        throw error;
+      }
     });
 
     // Provide messenger to utils so they can interact with GUI + state
@@ -629,13 +646,26 @@ export class Core {
       }
 
       try {
-        return await compactConversation({
+        outputLog("compact", {
+          sessionId: msg.data.sessionId,
+          index: msg.data.index,
+        });
+        const summary = await compactConversation({
           sessionId: msg.data.sessionId,
           index: msg.data.index,
           historyManager,
           currentModel,
         });
+        outputLog("compact-done", {
+          sessionId: msg.data.sessionId,
+          chars: summary?.length ?? 0,
+        });
+        return summary;
       } catch (error) {
+        outputLog("error", {
+          where: "conversation/compact",
+          message: errorText(error),
+        });
         Logger.error(`Error compacting conversation: ${error}`);
         return undefined;
       }
@@ -1044,9 +1074,27 @@ export class Core {
       return { url: "" };
     });
 
-    on("tools/call", async ({ data: { toolCall } }) =>
-      this.handleToolCall(toolCall),
-    );
+    on("tools/call", async ({ data: { toolCall } }) => {
+      const name = toolCall.function.name;
+      outputLog("tool", { name });
+      try {
+        const result = await this.handleToolCall(toolCall);
+        if (result?.errorMessage) {
+          outputLog("tool-error", {
+            name,
+            message: String(result.errorMessage).slice(0, 300),
+          });
+        }
+        return result;
+      } catch (error) {
+        outputLog("error", {
+          where: "tools/call",
+          name,
+          message: errorText(error),
+        });
+        throw error;
+      }
+    });
 
     on(
       "tools/evaluatePolicy",

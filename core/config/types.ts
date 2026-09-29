@@ -704,7 +704,7 @@ declare global {
   
     saveFile(filepath: string): Promise<void>;
   
-    readFile(filepath: string): Promise<string>;
+    readFile(filepath: string, full?: boolean): Promise<string>;
   
     readRangeInFile(filepath: string, range: Range): Promise<string>;
   

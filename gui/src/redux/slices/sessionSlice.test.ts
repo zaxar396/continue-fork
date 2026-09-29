@@ -3,6 +3,7 @@ import { renderChatMessage } from "core/util/messageContent";
 import { v4 as uuidv4 } from "uuid";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { addToolCallDeltaToState } from "../../util/toolCallState";
+import { EMPTY_TOOL_LOOP } from "core/tools/toolCallLoop";
 import { ChatHistoryItemWithMessageId, sessionSlice } from "./sessionSlice";
 
 // Mock dependencies
@@ -76,6 +77,7 @@ describe("sessionSlice streamUpdate", () => {
     newestToolbarPreviewForInput: {},
     isSessionMetadataLoading: false,
     compactionLoading: {},
+    toolLoop: EMPTY_TOOL_LOOP,
   });
 
   describe("Basic Chat Message", () => {

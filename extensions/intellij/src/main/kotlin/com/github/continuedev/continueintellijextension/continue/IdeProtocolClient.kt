@@ -146,7 +146,7 @@ class IdeProtocolClient(
                             dataElement.toString(),
                             ReadFileParams::class.java
                         )
-                        val contents = ide.readFile(params.filepath)
+                        val contents = ide.readFile(params.filepath, params.full)
                         respond(contents)
                     }
 

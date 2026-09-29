@@ -88,6 +88,7 @@ export function executeFindAndReplace(
   newString: string,
   replaceAll: boolean,
   editIndex = 0,
+  suggestReplaceAll = true,
 ): string {
   const matches = findSearchMatches(fileContent, oldString);
 
@@ -118,9 +119,12 @@ export function executeFindAndReplace(
   } else {
     // For single replacement, check for multiple matches first
     if (matches.length > 1) {
+      const hint = suggestReplaceAll
+        ? "Either provide a more specific string with surrounding context to make it unique, or use replace_all=true to replace all occurrences."
+        : "Include more surrounding lines so old_string matches exactly once.";
       throw new ContinueError(
         ContinueErrorReason.FindAndReplaceMultipleOccurrences,
-        `Edit at index ${editIndex}: String "${oldString}" appears ${matches.length} times in the file. Either provide a more specific string with surrounding context to make it unique, or use replace_all=true to replace all occurrences.`,
+        `Edit at index ${editIndex}: String "${oldString}" appears ${matches.length} times in the file. ${hint}`,
       );
     }
 
@@ -143,6 +147,7 @@ export function executeFindAndReplace(
 export function executeMultiFindAndReplace(
   fileContent: string,
   edits: EditOperation[],
+  suggestReplaceAll = true,
 ): string {
   let result = fileContent;
 
@@ -153,8 +158,9 @@ export function executeMultiFindAndReplace(
       result,
       edit.old_string,
       edit.new_string,
-      edit.replace_all ?? false,
+      suggestReplaceAll ? (edit.replace_all ?? false) : false,
       editIndex,
+      suggestReplaceAll,
     );
   }
 

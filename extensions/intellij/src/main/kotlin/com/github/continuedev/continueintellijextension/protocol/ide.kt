@@ -28,7 +28,7 @@ data class SaveFileParams(val filepath: String)
 
 data class FileExistsParams(val filepath: String)
 
-data class ReadFileParams(val filepath: String)
+data class ReadFileParams(val filepath: String, val full: Boolean = false)
 
 data class ShowDiffParams(
     val filepath: String,

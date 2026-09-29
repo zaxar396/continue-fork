@@ -13,7 +13,8 @@ export const viewDiffTool: Tool = {
   group: BUILT_IN_GROUP_NAME,
   function: {
     name: BuiltInToolNames.ViewDiff,
-    description: "View the current diff of working changes",
+    description:
+      "View the git diff of uncommitted working changes. To read a file's contents, use read_file.",
     parameters: {
       type: "object",
       properties: {},

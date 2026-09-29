@@ -32,6 +32,8 @@ export const sharedConfigSchema = z
     displayRawMarkdown: z.boolean(),
     showChatScrollbar: z.boolean(),
     continueAfterToolRejection: z.boolean(),
+    autoCompactContext: z.boolean(),
+    logLlmTraffic: z.boolean(),
 
     // `tabAutocompleteOptions` in `ContinueConfig`
     useAutocompleteCache: z.boolean(),
@@ -157,6 +159,12 @@ export function modifyAnyConfigWithSharedConfig<
   if (sharedConfig.continueAfterToolRejection !== undefined) {
     configCopy.ui.continueAfterToolRejection =
       sharedConfig.continueAfterToolRejection;
+  }
+  if (sharedConfig.autoCompactContext !== undefined) {
+    configCopy.ui.autoCompactContext = sharedConfig.autoCompactContext;
+  }
+  if (sharedConfig.logLlmTraffic !== undefined) {
+    configCopy.ui.logLlmTraffic = sharedConfig.logLlmTraffic;
   }
 
   configCopy.experimental = {

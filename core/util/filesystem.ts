@@ -237,7 +237,7 @@ class FileSystemIde implements IDE {
     return Promise.resolve();
   }
 
-  readFile(fileUri: string): Promise<string> {
+  readFile(fileUri: string, _full?: boolean): Promise<string> {
     const filepath = fileURLToPath(fileUri);
     return new Promise((resolve, reject) => {
       fs.readFile(filepath, "utf8", (err, contents) => {

@@ -361,7 +361,7 @@ class VsCodeIde implements IDE {
 
   private static MAX_BYTES = 100000;
 
-  async readFile(fileUri: string): Promise<string> {
+  async readFile(fileUri: string, full = false): Promise<string> {
     try {
       const uri = vscode.Uri.parse(fileUri);
 
@@ -390,7 +390,11 @@ class VsCodeIde implements IDE {
       }
 
       const fileStats = await this.ideUtils.stat(uri);
-      if (fileStats === null || fileStats.size > 10 * VsCodeIde.MAX_BYTES) {
+      const fullCap = 32 * 1024 * 1024;
+      if (
+        fileStats === null ||
+        fileStats.size > (full ? fullCap : 10 * VsCodeIde.MAX_BYTES)
+      ) {
         return "";
       }
 
@@ -399,10 +403,8 @@ class VsCodeIde implements IDE {
         return "";
       }
 
-      // Truncate the buffer to the first MAX_BYTES
-      const truncatedBytes = bytes.slice(0, VsCodeIde.MAX_BYTES);
-      const contents = new TextDecoder().decode(truncatedBytes);
-      return contents;
+      const truncatedBytes = full ? bytes : bytes.slice(0, VsCodeIde.MAX_BYTES);
+      return full ? decodeFileText(truncatedBytes) : new TextDecoder().decode(truncatedBytes);
     } catch (e) {
       return "";
     }
@@ -717,6 +719,18 @@ class VsCodeIde implements IDE {
         directories,
         vscode.ConfigurationTarget.Global,
       );
+  }
+}
+
+function decodeFileText(bytes: Uint8Array): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    try {
+      return new TextDecoder("windows-1251").decode(bytes);
+    } catch {
+      return new TextDecoder().decode(bytes);
+    }
   }
 }
 

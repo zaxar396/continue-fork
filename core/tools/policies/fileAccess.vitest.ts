@@ -30,13 +30,15 @@ describe("readFileTool.evaluateToolCallPolicy", () => {
       "allowedWithoutPermission",
       {},
       {
-        resolvedPath: {
-          uri: "file:///C:/test/lib.go",
-          displayPath: "C:\\test\\lib.go",
-          isAbsolute: true,
-          isWithinWorkspace: false,
-          isInAllowedDirectory: true,
-        },
+        resolvedPaths: [
+          {
+            uri: "file:///C:/test/lib.go",
+            displayPath: "C:\\test\\lib.go",
+            isAbsolute: true,
+            isWithinWorkspace: false,
+            isInAllowedDirectory: true,
+          },
+        ],
       },
     );
     expect(policy).toBe("allowedWithoutPermission");
@@ -47,13 +49,15 @@ describe("readFileTool.evaluateToolCallPolicy", () => {
       "allowedWithoutPermission",
       {},
       {
-        resolvedPath: {
-          uri: "file:///C:/other/lib.go",
-          displayPath: "C:\\other\\lib.go",
-          isAbsolute: true,
-          isWithinWorkspace: false,
-          isInAllowedDirectory: false,
-        },
+        resolvedPaths: [
+          {
+            uri: "file:///C:/other/lib.go",
+            displayPath: "C:\\other\\lib.go",
+            isAbsolute: true,
+            isWithinWorkspace: false,
+            isInAllowedDirectory: false,
+          },
+        ],
       },
     );
     expect(policy).toBe("allowedWithPermission");

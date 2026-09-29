@@ -227,6 +227,16 @@ class OpenAI extends BaseLLM {
     return !!model && model.startsWith("accounts/fireworks/models");
   }
 
+  private shouldDisableParallelToolCalls(model?: string): boolean {
+    if (!model || model.startsWith("o3")) {
+      return false;
+    }
+    const lower = model.toLowerCase();
+    return (
+      lower.startsWith("gpt-") || !!lower.match(/^o[0-9]/) || lower.startsWith("codex")
+    );
+  }
+
   protected supportsPrediction(model: string): boolean {
     const SUPPORTED_MODELS = [
       "gpt-4o-mini",
@@ -473,12 +483,10 @@ class OpenAI extends BaseLLM {
         // tooling works with them as a inference provider once this is set to true.
         // https://docs.fireworks.ai/guides/function-calling#openai-compatibility
         body.parallel_tool_calls = true;
-      }
-      // To ensure schema adherence: https://platform.openai.com/docs/guides/function-calling#parallel-function-calling-and-structured-outputs
-      // In practice, setting this to true and asking for multiple tool calls
-      // leads to "arguments" being something like '{"file": "test.ts"}{"file": "test.js"}'
-      // o3 does not support this
-      if (!body.model.startsWith("o3")) {
+      } else if (this.shouldDisableParallelToolCalls(body.model)) {
+        // Official OpenAI models can concatenate arguments when several tools
+        // are called together: '{"file":"a.ts"}{"file":"b.ts"}'.
+        // o3 does not accept this field. Other model ids keep the server default.
         body.parallel_tool_calls = false;
       }
     }
