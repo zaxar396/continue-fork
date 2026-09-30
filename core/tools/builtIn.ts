@@ -17,6 +17,7 @@ export enum BuiltInToolNames {
   FetchUrlContent = "fetch_url_content",
   CodebaseTool = "codebase",
   ReadSkill = "read_skill",
+  AskQuestion = "ask_question",
 
   // excluded from allTools for now
   ViewRepoMap = "view_repo_map",
@@ -29,6 +30,7 @@ export const CLIENT_TOOLS_IMPLS = [
   BuiltInToolNames.EditExistingFile,
   BuiltInToolNames.SingleFindAndReplace,
   BuiltInToolNames.MultiEdit,
+  BuiltInToolNames.AskQuestion,
 ];
 
 /** Write/terminal tools that should run without an Accept click by default. */

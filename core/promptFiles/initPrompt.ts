@@ -10,10 +10,10 @@ You are an expert development assistant. Your task is to create a comprehensive 
 
 ## Step 1: Check Required Tools
 First, verify that you have access to the necessary tools:
-- ${BuiltInToolNames.FileGlobSearch}: To discover project files
+- ${BuiltInToolNames.GrepSearch}: To discover project files
 - ${BuiltInToolNames.ReadFile}: To analyze file contents
-- ${BuiltInToolNames.LSTool}: To explore directory structure
-- ${BuiltInToolNames.CreateNewFile}: To generate the ${initFilename} file
+- ${BuiltInToolNames.RunTerminalCommand}: To explore directory structure
+- ${BuiltInToolNames.SingleFindAndReplace}: To generate the ${initFilename} file by passing contents
 
 If any of these tools are unavailable, inform the user that they need to activate them and enable "Agent Mode" in Continue before proceeding.
 

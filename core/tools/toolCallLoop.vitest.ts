@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   EMPTY_TOOL_LOOP,
   FILE_CYCLE_WINDOW,
-  TEXT_LOOP_STOP,
   TOOL_CYCLE_STOP,
   isIntentNarration,
   isRepeatedPhrase,
@@ -113,7 +112,7 @@ describe("tool call loop", () => {
     expect(last.notice).toBe(TOOL_CYCLE_STOP);
   });
 
-  it("stops when the same reply is repeated three times", () => {
+  it("runs a different file read when the reply text repeats", () => {
     let state = EMPTY_TOOL_LOOP;
     const phrase = "Давайте я сделаю это.";
     let last = noteAgentProgress(state, {
@@ -145,8 +144,7 @@ describe("tool call loop", () => {
       ],
       assistantText: phrase,
     });
-    expect(last.action).toBe("stop");
-    expect(last.notice).toBe(TEXT_LOOP_STOP);
+    expect(last.action).toBe("continue");
   });
 
   it("stops a plan that restates the next step without a tool call", () => {

@@ -355,22 +355,11 @@ export function noteAgentProgress(
   },
 ): AgentProgress {
   const identical = noteToolBatch(state, toolBatchSignature(round.calls));
-  const text = normalizeAssistantText(round.assistantText);
-  const texts =
-    text.length >= 8 ? [...identical.state.texts, text] : identical.state.texts;
-  let next: ToolLoopState = { ...identical.state, texts };
+  let next: ToolLoopState = identical.state;
   const classified = classifyRound(round.calls);
 
   if (identical.action === "stop") {
     return { state: next, action: "stop", notice: TOOL_LOOP_STOP };
-  }
-  if (
-    text.length >= 8 &&
-    (texts.filter((item) => item === text).length >= TEXT_REPEAT_THRESHOLD ||
-      isRepeatedPhrase(text) ||
-      isRepeatedPhrase(texts.join("\n")))
-  ) {
-    return { state: next, action: "stop", notice: TEXT_LOOP_STOP };
   }
   if (isFileCycle([...next.recent, classified])) {
     return { state: next, action: "stop", notice: TOOL_CYCLE_STOP };

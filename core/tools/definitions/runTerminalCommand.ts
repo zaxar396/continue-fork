@@ -29,7 +29,7 @@ const RUN_COMMAND_NOTES = `The shell is not stateful and will not remember any p
       When a command is run in the background ALWAYS suggest using shell commands to stop it; NEVER suggest using Ctrl+C.\
       When suggesting subsequent shell commands ALWAYS format them in shell command blocks.\
       Do NOT perform actions requiring special/admin privileges.\
-      IMPORTANT: To edit files, use the edit tools instead of shell commands (sed, awk, etc). Use this tool for git status.\
+      IMPORTANT: To edit files, use the edit tools instead of shell commands (sed, awk, etc). Use this tool to list a directory, check git status, or show a git diff.\
       ${PLATFORM_INFO}`;
 
 export const runTerminalCommandTool: Tool = {
@@ -52,11 +52,6 @@ export const runTerminalCommandTool: Tool = {
           description:
             "The command to run. This will be passed directly into the IDE shell.",
         },
-        waitForCompletion: {
-          type: "boolean",
-          description:
-            "Whether to wait for the command to complete before returning. Default is true. Set to false to run the command in the background. Set to true to run the command in the foreground and wait to collect the output.",
-        },
       },
     },
   },
@@ -73,7 +68,6 @@ export const runTerminalCommandTool: Tool = {
   systemMessageDescription: {
     prefix: `To run a terminal command, use the ${BuiltInToolNames.RunTerminalCommand} tool
 ${RUN_COMMAND_NOTES}
-You can also optionally include the waitForCompletion argument set to false to run the command in the background.      
 For example, to see the git log, you could respond with:`,
     exampleArgs: [["command", "git log"]],
   },

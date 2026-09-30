@@ -36,7 +36,8 @@
                     "id": "test_id",
                     "type": "function",
                     "function": {
-                      "name": "view_diff"
+                      "name": "grep_search",
+                      "arguments": "{\"query\":\"main\"}"
                     }
                   }
                 ]

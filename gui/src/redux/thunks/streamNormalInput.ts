@@ -10,15 +10,7 @@ import {
 } from "core/tools/toolCallValidity";
 import {
   EMPTY_TOOL_LOOP,
-  INTENT_LOOP_STOP,
-  TEXT_LOOP_STOP,
   TOOL_LOOP_STOP,
-  currentReplyWithoutTools,
-  isIntentNarration,
-  isRepeatedPhrase,
-  LOOP_RESUME_INSTRUCTION,
-  PHRASE_LOOP_RESUME,
-  turnSpokenText,
   noteAgentProgress,
 } from "core/tools/toolCallLoop";
 import { selectActiveTools } from "../selectors/selectActiveTools";
@@ -26,7 +18,6 @@ import { selectSelectedChatModel } from "../slices/configSlice";
 import {
   abortStream,
   addPromptCompletionPair,
-  appendLoopResume,
   errorToolCall,
   setActive,
   setAppliedRulesAtIndex,
@@ -97,13 +88,12 @@ export const streamNormalInput = createAsyncThunk<
   {
     legacySlashCommandData?: ToCoreProtocol["llm/streamChat"][0]["legacySlashCommandData"];
     depth?: number;
-    loopResumed?: boolean;
   },
   ThunkApiType
 >(
   "chat/streamNormalInput",
   async (
-    { legacySlashCommandData, depth = 0, loopResumed = false },
+    { legacySlashCommandData, depth = 0 },
     { dispatch, extra, getState },
   ) => {
     if (process.env.NODE_ENV === "test" && depth > 50) {
@@ -114,19 +104,6 @@ export const streamNormalInput = createAsyncThunk<
     if (depth === 0) {
       dispatch(setToolLoop(EMPTY_TOOL_LOOP));
     }
-
-    const resumeAfterLoop = async (
-      instruction: string = LOOP_RESUME_INSTRUCTION,
-    ) => {
-      if (loopResumed) {
-        dispatch(setInactive());
-        return;
-      }
-      dispatch(appendLoopResume(instruction));
-      unwrapResult(
-        await dispatch(streamNormalInput({ depth: 0, loopResumed: true })),
-      );
-    };
 
     const executeAutoTools = async (
       calls: {
@@ -176,7 +153,7 @@ export const streamNormalInput = createAsyncThunk<
             }),
           );
         }
-        await resumeAfterLoop();
+        dispatch(setInactive());
         return;
       }
       await Promise.all(
@@ -387,22 +364,6 @@ export const streamNormalInput = createAsyncThunk<
         }
 
         dispatch(streamUpdate(next.value));
-        const history = getState().session.history;
-        const intentLoop = isIntentNarration(currentReplyWithoutTools(history));
-        const phraseLoop = isRepeatedPhrase(turnSpokenText(history));
-        if (intentLoop || phraseLoop) {
-          dispatch(
-            streamUpdate([
-              {
-                role: "assistant",
-                content: `\n\n${intentLoop ? INTENT_LOOP_STOP : TEXT_LOOP_STOP}`,
-              },
-            ]),
-          );
-          dispatch(abortStream());
-          await resumeAfterLoop(PHRASE_LOOP_RESUME);
-          return;
-        }
         next = await gen.next();
       }
 

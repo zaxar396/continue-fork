@@ -297,13 +297,11 @@ describe.skip("GUI Test", () => {
         DEFAULT_TIMEOUT.SM,
       );
 
-      expect(await statusMessage.getText()).contain(
-        "Continue viewed the git diff",
-      );
+      expect(await statusMessage.getText()).contain("searched for");
     }).timeout(DEFAULT_TIMEOUT.MD * 100);
 
     it("should call tool after approval", async () => {
-      await GUIActions.toggleToolPolicy(view, "view_diff", 2);
+      await GUIActions.toggleToolPolicy(view, "grep_search", 2);
 
       const [messageInput] = await GUISelectors.getMessageInputFields(view);
       await messageInput.sendKeys("Hello");
@@ -320,11 +318,11 @@ describe.skip("GUI Test", () => {
       );
 
       const text = await statusMessage.getText();
-      expect(text).contain("the git diff");
+      expect(text).contain("search for");
     }).timeout(DEFAULT_TIMEOUT.XL);
 
     it("should cancel tool", async () => {
-      await GUIActions.toggleToolPolicy(view, "view_diff", 2);
+      await GUIActions.toggleToolPolicy(view, "grep_search", 2);
 
       const [messageInput] = await GUISelectors.getMessageInputFields(view);
       await messageInput.sendKeys("Hello");
@@ -341,7 +339,7 @@ describe.skip("GUI Test", () => {
       );
 
       const text = await statusMessage.getText();
-      expect(text).contain("Continue tried to view the git diff");
+      expect(text).contain("tried to search for");
     }).timeout(DEFAULT_TIMEOUT.XL);
   });
 

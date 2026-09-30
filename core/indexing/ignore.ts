@@ -1,7 +1,5 @@
 import ignore from "ignore";
 
-import path from "path";
-import { fileURLToPath } from "url";
 import { ContinueError, ContinueErrorReason } from "../util/errors";
 
 // Security-focused ignore patterns - these should always be excluded for security reasons
@@ -235,17 +233,51 @@ export const defaultIgnoreFileAndDir = ignore()
   .add(defaultIgnoreFile)
   .add(defaultIgnoreDir);
 
+function filesystemPath(filePathOrUri: string): string {
+  if (!filePathOrUri.startsWith("file:")) {
+    return filePathOrUri;
+  }
+  try {
+    const pathname = decodeURIComponent(new URL(filePathOrUri).pathname);
+    if (/^\/[A-Za-z]:/.test(pathname)) {
+      return pathname.slice(1);
+    }
+    return pathname;
+  } catch {
+    return filePathOrUri;
+  }
+}
+
+function isAbsolutePath(filepath: string): boolean {
+  return (
+    filepath.startsWith("/") ||
+    filepath.startsWith("\\") ||
+    /^[A-Za-z]:[\\/]/.test(filepath)
+  );
+}
+
+function pathBasename(filepath: string): string {
+  const parts = filepath.split(/[/\\]/);
+  return parts[parts.length - 1] ?? "";
+}
+
+function parentDirName(filepath: string): string {
+  const parts = filepath.split(/[/\\]/);
+  parts.pop();
+  while (parts.length > 0 && parts[parts.length - 1] === "") {
+    parts.pop();
+  }
+  return parts[parts.length - 1] ?? "";
+}
+
 export function isSecurityConcern(filePathOrUri: string) {
   if (!filePathOrUri) {
     return false;
   }
-  let filepath = filePathOrUri;
-  try {
-    filepath = fileURLToPath(filePathOrUri);
-  } catch {}
-  if (path.isAbsolute(filepath)) {
-    const dir = path.dirname(filepath).split(/\/|\\/).at(-1) ?? "";
-    const basename = path.basename(filepath);
+  let filepath = filesystemPath(filePathOrUri);
+  if (isAbsolutePath(filepath)) {
+    const dir = parentDirName(filepath);
+    const basename = pathBasename(filepath);
     filepath = `${dir ? dir + "/" : ""}${basename}`;
   }
   if (!filepath) {

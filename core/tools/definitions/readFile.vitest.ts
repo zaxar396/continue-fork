@@ -3,6 +3,7 @@ import { filePathsFromArg } from "./readFile";
 import {
   limitLines,
   optionalLine,
+  readWindowNotice,
   sliceFileLines,
 } from "../implementations/readFileWindow";
 
@@ -53,5 +54,25 @@ describe("read file line window", () => {
     expect(fitted.lines.length).toBeGreaterThan(0);
     expect(fitted.lines.length).toBeLessThan(lines.length);
     expect(fitted.lines.join("\n").length).toBeLessThanOrEqual(30);
+  });
+
+  it("names the next read_file call with exact line numbers", () => {
+    const notice = readWindowNotice("api/swagger.yaml", 1, 400, 1000, true);
+    expect(notice).toContain("600 more lines follow");
+    expect(notice).toContain(
+      'filepath "api/swagger.yaml", start_line 401, end_line 800',
+    );
+    expect(notice).toContain('grep_search with path "api/swagger.yaml"');
+  });
+
+  it("clips the next window at the end of the file", () => {
+    const notice = readWindowNotice("api/swagger.yaml", 401, 800, 1000, true);
+    expect(notice).toContain("start_line 801, end_line 1000");
+  });
+
+  it("does not offer a next window when the range is complete", () => {
+    expect(readWindowNotice("a.yaml", 1, 40, 40, false)).toBe(
+      "[read_file] a.yaml: lines 1-40 of 40.",
+    );
   });
 });

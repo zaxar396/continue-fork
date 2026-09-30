@@ -35,7 +35,12 @@ test("searchWeb tool is always available", async () => {
 test("the base set offers read_file and not the current-file reader", () => {
   const names = getBaseToolDefinitions().map((tool) => tool.function.name);
   expect(names).toContain(BuiltInToolNames.ReadFile);
+  expect(names).toContain(BuiltInToolNames.AskQuestion);
   expect(names).not.toContain(BuiltInToolNames.ReadCurrentlyOpenFile);
+  expect(names).not.toContain(BuiltInToolNames.FileGlobSearch);
+  expect(names).not.toContain(BuiltInToolNames.LSTool);
+  expect(names).not.toContain(BuiltInToolNames.ViewDiff);
+  expect(names).not.toContain(BuiltInToolNames.CreateNewFile);
 });
 
 test("a non-recommended model receives one edit tool", async () => {

@@ -1,10 +1,36 @@
 import { ToolCallState } from "core";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import { EditOperation } from "core/tools/definitions/multiEdit";
+import { AskQuestion } from "./AskQuestion";
 import { CreateFile } from "./CreateFile";
 import { EditFile } from "./EditFile";
 import { FindAndReplaceDisplay } from "./FindAndReplace";
 import { RunTerminalCommand } from "./RunTerminalCommand";
+
+function isNewFileCall(
+  processedArgs: Record<string, any> | undefined,
+  args: Record<string, any> | undefined,
+): boolean {
+  if (processedArgs?.creating === true) {
+    return true;
+  }
+  if (typeof args?.contents !== "string") {
+    return false;
+  }
+  if (Array.isArray(args.replacements) && args.replacements.length > 0) {
+    return false;
+  }
+  if (Array.isArray(args.edits) && args.edits.length > 0) {
+    return false;
+  }
+  if (
+    !Array.isArray(args.replacements) &&
+    (args.old_string !== undefined || args.new_string !== undefined)
+  ) {
+    return false;
+  }
+  return true;
+}
 
 function FunctionSpecificToolCallDiv({
   toolCallState,
@@ -18,6 +44,8 @@ function FunctionSpecificToolCallDiv({
   const toolCall = toolCallState.toolCall;
 
   switch (toolCall.function?.name) {
+    case BuiltInToolNames.AskQuestion:
+      return <AskQuestion toolCallState={toolCallState} />;
     case BuiltInToolNames.CreateNewFile:
       return (
         <CreateFile
@@ -36,6 +64,17 @@ function FunctionSpecificToolCallDiv({
         />
       );
     case BuiltInToolNames.SingleFindAndReplace:
+      if (isNewFileCall(processedArgs, args)) {
+        return (
+          <CreateFile
+            relativeFilepath={args?.filepath ?? ""}
+            fileContents={
+              processedArgs?.newFileContents ?? args?.contents ?? ""
+            }
+            historyIndex={historyIndex}
+          />
+        );
+      }
       const replacementSource = Array.isArray(processedArgs?.edits)
         ? processedArgs.edits
         : Array.isArray(args?.replacements)
@@ -65,6 +104,17 @@ function FunctionSpecificToolCallDiv({
         />
       );
     case BuiltInToolNames.MultiEdit:
+      if (isNewFileCall(processedArgs, args)) {
+        return (
+          <CreateFile
+            relativeFilepath={args?.filepath ?? ""}
+            fileContents={
+              processedArgs?.newFileContents ?? args?.contents ?? ""
+            }
+            historyIndex={historyIndex}
+          />
+        );
+      }
       return (
         <FindAndReplaceDisplay
           editingFileContents={processedArgs?.editingFileContents}

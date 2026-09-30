@@ -1,9 +1,17 @@
-import { Tool } from "../..";
+import { IDE, Tool } from "../..";
 import { validateSingleEdit } from "../../edit/searchAndReplace/findAndReplaceUtils";
 import { executeMultiFindAndReplace } from "../../edit/searchAndReplace/performReplace";
-import { validateSearchAndReplaceFilepath } from "../../edit/searchAndReplace/validateArgs";
 import { ContinueError, ContinueErrorReason } from "../../util/errors";
 import { BUILT_IN_GROUP_NAME, BuiltInToolNames } from "../builtIn";
+import {
+  FILE_WRITE_ARGS_REQUIRED,
+  PreparedFileCreate,
+  PreparedFileEdit,
+  requireFilepath,
+  resolveExistingFile,
+  resolveNewFile,
+  singleFindHasEdits,
+} from "../fileWritePlan";
 import { EditOperation } from "./multiEdit";
 
 export interface SingleFindReplacement {
@@ -85,25 +93,64 @@ export function editsFromSingleFindArgs(
 
   throw new ContinueError(
     ContinueErrorReason.MultiEditEditsArrayRequired,
-    "replacements is required",
+    FILE_WRITE_ARGS_REQUIRED,
   );
+}
+
+export async function prepareSingleFind(
+  args: Record<string, unknown>,
+  ide: IDE,
+): Promise<PreparedFileEdit | PreparedFileCreate> {
+  const filepath = requireFilepath(args.filepath);
+  if (!singleFindHasEdits(args)) {
+    if (typeof args.contents !== "string") {
+      throw new ContinueError(
+        ContinueErrorReason.MultiEditEditsArrayRequired,
+        FILE_WRITE_ARGS_REQUIRED,
+      );
+    }
+    return {
+      creating: true,
+      fileUri: await resolveNewFile(filepath, ide),
+      newFileContents: args.contents,
+    };
+  }
+
+  const edits = editsFromSingleFindArgs(args);
+  const fileUri = await resolveExistingFile(filepath, ide);
+  const editingFileContents = await ide.readFile(fileUri);
+  return {
+    creating: false,
+    fileUri,
+    editingFileContents,
+    newFileContents: executeMultiFindAndReplace(
+      editingFileContents,
+      edits,
+      false,
+    ),
+    edits,
+  };
 }
 
 export const singleFindAndReplaceTool: Tool = {
   type: "function",
   displayTitle: "Find and Replace",
-  wouldLikeTo: "edit {{{ filepath }}}",
-  isCurrently: "editing {{{ filepath }}}",
-  hasAlready: "edited {{{ filepath }}}",
+  wouldLikeTo: "write {{{ filepath }}}",
+  isCurrently: "writing {{{ filepath }}}",
+  hasAlready: "wrote {{{ filepath }}}",
   group: BUILT_IN_GROUP_NAME,
   readonly: false,
   isInstant: false,
   function: {
     name: BuiltInToolNames.SingleFindAndReplace,
-    description: `Performs exact string replacements in a file.
+    description: `Create a file that does not exist, or replace exact text in a file that exists.
+
+To create a missing file, pass filepath and contents. Do not pass replacements.
+To change an existing file, pass filepath and replacements. Read the file first. Do not pass contents.
+If the file already exists, contents is rejected. If it does not exist, replacements are rejected.
+Do not print the file in the reply. The file text belongs only in this call.
 
 IMPORTANT:
-- ALWAYS use the \`${BuiltInToolNames.ReadFile}\` tool just before making edits, to understand the file's up-to-date contents and context. The user can also edit the file while you are working with it.
 - Pass every replacement already known for this file in the replacements array of this one call. One item is enough. Do not list the replacements in prose first.
 - When editing text from \`${BuiltInToolNames.ReadFile}\` tool output, ensure you preserve exact whitespace/indentation.
 - Only use emojis if the user explicitly requests it. Avoid adding emojis to files unless asked.
@@ -114,39 +161,49 @@ WARNINGS:
 - The edit will likely fail if you have not recently used the \`${BuiltInToolNames.ReadFile}\` tool to view up-to-date file contents.`,
     parameters: {
       type: "object",
-      required: ["filepath", "replacements"],
+      required: ["filepath"],
       properties: {
         filepath: {
           type: "string",
           description:
-            "The path to the file to modify, relative to the root of the workspace",
+            "The path of the file to create or change, relative to the root of the workspace",
+        },
+        contents: {
+          anyOf: [{ type: "string" }, { type: "null" }],
+          description:
+            "Full text of a new file. Use this only when the file does not exist. Omit it when passing replacements.",
         },
         replacements: {
-          type: "array",
-          description:
-            "Every replacement already known for this file, applied in order. Use one item when there is only one change.",
-          items: {
-            type: "object",
-            required: ["old_string", "new_string"],
-            properties: {
-              old_string: {
-                type: "string",
-                description:
-                  "The text to replace. It must match exactly once, including whitespace and indentation.",
-              },
-              new_string: {
-                type: "string",
-                description:
-                  "The text to replace it with. It must differ from old_string.",
+          anyOf: [
+            {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["old_string", "new_string"],
+                properties: {
+                  old_string: {
+                    type: "string",
+                    description:
+                      "The text to replace. It must match exactly once, including whitespace and indentation.",
+                  },
+                  new_string: {
+                    type: "string",
+                    description:
+                      "The text to replace it with. It must differ from old_string.",
+                  },
+                },
               },
             },
-          },
+            { type: "null" },
+          ],
+          description:
+            "Every replacement already known for an existing file, applied in order. Use one item when there is only one change. Omit this when creating a file with contents.",
         },
       },
     },
   },
   systemMessageDescription: {
-    prefix: `To perform exact string replacements in a file, use the ${BuiltInToolNames.SingleFindAndReplace} tool with a filepath (relative to the root of the workspace) and a replacements array. Put every known replacement for that file in the same call.
+    prefix: `To create a missing file or change an existing one, use the ${BuiltInToolNames.SingleFindAndReplace} tool. Pass contents when the file does not exist. Pass a replacements array when it does.
 
   For example, you could respond with:`,
     exampleArgs: [
@@ -159,25 +216,10 @@ WARNINGS:
   },
   defaultToolPolicy: "allowedWithoutPermission",
   preprocessArgs: async (args, extras) => {
-    const edits = editsFromSingleFindArgs(args);
-    const fileUri = await validateSearchAndReplaceFilepath(
-      args.filepath,
-      extras.ide,
-    );
-
-    const editingFileContents = await extras.ide.readFile(fileUri);
-    const newFileContents = executeMultiFindAndReplace(
-      editingFileContents,
-      edits,
-      false,
-    );
-
+    const prepared = await prepareSingleFind(args, extras.ide);
     return {
       ...args,
-      edits,
-      fileUri,
-      editingFileContents,
-      newFileContents,
+      ...prepared,
     };
   },
 };

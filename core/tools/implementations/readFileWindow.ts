@@ -134,5 +134,12 @@ export function readWindowNotice(
   if (!truncated) {
     return range;
   }
-  return `${range} This file is too large to return at once. Call read_file again with start_line and end_line, or call grep_search with path set to this file and then read the matching lines.`;
+  const remaining = totalLines - endLine;
+  if (remaining <= 0) {
+    return `${range} The rest of the file is empty.`;
+  }
+  const windowSize = Math.max(1, endLine - startLine + 1);
+  const nextStart = endLine + 1;
+  const nextEnd = Math.min(totalLines, endLine + windowSize);
+  return `${range} ${remaining} more lines follow. To read the next part, call read_file in this response with filepath "${displayPath}", start_line ${nextStart}, end_line ${nextEnd}. To find a specific schema or name in the rest of the file, call grep_search with path "${displayPath}" instead. Make the call now; do not describe it.`;
 }
