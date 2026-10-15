@@ -2,7 +2,13 @@ import { ToolCallDelta, ToolCallState } from "core";
 import { BuiltInToolNames } from "core/tools/builtIn";
 import {
   addToolCallDeltaToState,
+  extractRememberableBaseCommands,
+  extractTerminalBaseCommand,
+  getTerminalCommandFromArgs,
+  isCommandAutoApproved,
+  isCommandDangerous,
   isMcpTool,
+  isValidBaseCommandName,
   resolveAutoRunPolicy,
   shouldAutoAcceptApplyDiff,
   shouldSkipToolPermissionPrompt,
@@ -544,83 +550,214 @@ describe("shouldSkipToolPermissionPrompt", () => {
   });
 });
 
+describe("extractTerminalBaseCommand", () => {
+  it("takes the first whitespace-separated token", () => {
+    expect(extractTerminalBaseCommand("git status")).toBe("git");
+    expect(extractTerminalBaseCommand("  ls -la /tmp ")).toBe("ls");
+  });
+
+  it("uses the basename for path-qualified commands", () => {
+    expect(extractTerminalBaseCommand("/usr/bin/git status")).toBe("git");
+  });
+
+  it("returns null for empty input", () => {
+    expect(extractTerminalBaseCommand("")).toBeNull();
+    expect(extractTerminalBaseCommand(null)).toBeNull();
+  });
+
+  it("ignores PowerShell UTF-8 boilerplate and assignments", () => {
+    expect(
+      extractTerminalBaseCommand(
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [Console]::OutputEncoding; git status",
+      ),
+    ).toBe("git");
+    expect(
+      extractTerminalBaseCommand("$OutputEncoding = [Console]::OutputEncoding"),
+    ).toBeNull();
+  });
+});
+
+describe("extractRememberableBaseCommands", () => {
+  it("skips PowerShell noise and pipeline tails", () => {
+    expect(
+      extractRememberableBaseCommands(
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [Console]::OutputEncoding; git status | Select-Object -First 5",
+      ),
+    ).toEqual(["git"]);
+  });
+
+  it("remembers the first command of each statement", () => {
+    expect(
+      extractRememberableBaseCommands("pwd; ls -la | Select-Object -First 3"),
+    ).toEqual(["pwd", "ls"]);
+  });
+
+  it("accepts PowerShell cmdlets as valid names", () => {
+    expect(isValidBaseCommandName("get-childitem")).toBe(true);
+    expect(isValidBaseCommandName("$outputencoding")).toBe(false);
+    expect(isValidBaseCommandName("[console]::outputencoding")).toBe(false);
+    expect(extractRememberableBaseCommands("Get-ChildItem docs")).toEqual([
+      "get-childitem",
+    ]);
+  });
+
+  it("does not leak python -c payload into the allowlist", () => {
+    expect(
+      extractRememberableBaseCommands(
+        `python -c "import os; print(os.getcwd()); x=1"`,
+      ),
+    ).toEqual(["python"]);
+    expect(
+      extractRememberableBaseCommands(
+        `python3 -c 'import sys; print(sys.version)'`,
+      ),
+    ).toEqual(["python3"]);
+    expect(
+      extractRememberableBaseCommands(`py -3 -c "print(1); print(2)"`),
+    ).toEqual(["py"]);
+  });
+
+  it("does not split on semicolons inside quotes for auto-approve", () => {
+    expect(
+      isCommandAutoApproved(`python -c "import os; print(1)"`, ["python"]),
+    ).toBe(true);
+    expect(
+      isCommandAutoApproved(`python -c "import os; print(1)"`, ["print"]),
+    ).toBe(false);
+  });
+});
+
+describe("getTerminalCommandFromArgs / isCommandAutoApproved", () => {
+  it("reads command or joins commands", () => {
+    expect(getTerminalCommandFromArgs({ command: "ls -la" })).toBe("ls -la");
+    expect(getTerminalCommandFromArgs({ commands: ["pwd", "ls"] })).toBe(
+      "pwd; ls",
+    );
+  });
+
+  it("matches allowlisted base commands case-insensitively", () => {
+    expect(isCommandAutoApproved("Git Status", ["git", "ls"])).toBe(true);
+    expect(isCommandAutoApproved("curl https://x", ["git"])).toBe(false);
+  });
+
+  it("auto-approves find without dangerous flags", () => {
+    expect(isCommandAutoApproved("find . -name '*.ts'", ["find", "ls"])).toBe(
+      true,
+    );
+  });
+
+  it("asks for find with -exec / -delete / -ok", () => {
+    expect(isCommandAutoApproved("find . -name x -delete", ["find"])).toBe(
+      false,
+    );
+    expect(isCommandAutoApproved("find . -exec rm {} \\;", ["find"])).toBe(
+      false,
+    );
+    expect(isCommandAutoApproved("find . -okdir ls \\;", ["find"])).toBe(false);
+  });
+
+  it("requires every chained segment to be allowlisted and safe", () => {
+    expect(
+      isCommandAutoApproved("find . -name x | head", ["find", "head"]),
+    ).toBe(true);
+    expect(
+      isCommandAutoApproved("find . -name x | curl file://", ["find"]),
+    ).toBe(false);
+    expect(isCommandAutoApproved("find . -delete && ls", ["find", "ls"])).toBe(
+      false,
+    );
+  });
+
+  it("skips leading env assignments when parsing the base command", () => {
+    expect(isCommandAutoApproved("FOO=1 find . -name x", ["find"])).toBe(true);
+  });
+
+  it("never auto-approves when the base command is on the dangerous list", () => {
+    expect(
+      isCommandAutoApproved("curl https://x", ["curl", "ls"], ["curl"]),
+    ).toBe(false);
+    expect(isCommandDangerous("sudo apt update", ["sudo", "rm"])).toBe(true);
+    expect(isCommandDangerous("ls -la", ["sudo", "rm"])).toBe(false);
+  });
+});
+
 describe("resolveAutoRunPolicy", () => {
-  const safeAutoRun = {
-    autoRunSafeTerminalCommands: true,
-    autoRunDangerousTerminalCommands: false,
+  const baseAutoRun = {
+    autoRunCommands: ["ls", "git"],
+    dangerousCommands: ["curl", "sudo", "rm"],
     autoRunMcpTools: false,
   };
   const mcpTool = { uri: "mcp://server/tool" };
 
-  it("auto-runs safe terminal commands when the safe toggle is on", () => {
-    expect(
-      resolveAutoRunPolicy(
-        BuiltInToolNames.RunTerminalCommand,
-        undefined,
-        "allowedWithoutPermission",
-        "allowedWithoutPermission",
-        safeAutoRun,
-      ),
-    ).toBe("allowedWithoutPermission");
-  });
-
-  it("asks before running safe terminal commands when the safe toggle is off", () => {
-    expect(
-      resolveAutoRunPolicy(
-        BuiltInToolNames.RunTerminalCommand,
-        undefined,
-        "allowedWithoutPermission",
-        "allowedWithoutPermission",
-        { ...safeAutoRun, autoRunSafeTerminalCommands: false },
-      ),
-    ).toBe("allowedWithPermission");
-  });
-
-  it("still asks for high-risk commands when only the safe toggle is on", () => {
+  it("auto-runs when the base command is on the allowlist", () => {
     expect(
       resolveAutoRunPolicy(
         BuiltInToolNames.RunTerminalCommand,
         undefined,
         "allowedWithoutPermission",
         "allowedWithPermission",
-        safeAutoRun,
+        baseAutoRun,
+        "git status",
+      ),
+    ).toBe("allowedWithoutPermission");
+  });
+
+  it("asks when the base command is not on the allowlist", () => {
+    expect(
+      resolveAutoRunPolicy(
+        BuiltInToolNames.RunTerminalCommand,
+        undefined,
+        "allowedWithoutPermission",
+        "allowedWithoutPermission",
+        baseAutoRun,
+        "go test",
       ),
     ).toBe("allowedWithPermission");
   });
 
-  it("keeps blocked commands disabled when the dangerous toggle is off", () => {
+  it("always asks for dangerous commands even if also allowlisted", () => {
     expect(
       resolveAutoRunPolicy(
         BuiltInToolNames.RunTerminalCommand,
         undefined,
         "allowedWithoutPermission",
-        "disabled",
-        safeAutoRun,
+        "allowedWithoutPermission",
+        {
+          ...baseAutoRun,
+          autoRunCommands: ["curl", "ls"],
+          dangerousCommands: ["curl"],
+        },
+        "curl https://example.com",
       ),
-    ).toBe("disabled");
+    ).toBe("allowedWithPermission");
   });
 
-  it("auto-runs high-risk and blocked commands when the dangerous toggle is on", () => {
-    const dangerousOn = {
-      ...safeAutoRun,
-      autoRunDangerousTerminalCommands: true,
-    };
-    expect(
-      resolveAutoRunPolicy(
-        BuiltInToolNames.RunTerminalCommand,
-        undefined,
-        "allowedWithoutPermission",
-        "allowedWithPermission",
-        dangerousOn,
-      ),
-    ).toBe("allowedWithoutPermission");
+  it("asks even when security marked the command disabled", () => {
     expect(
       resolveAutoRunPolicy(
         BuiltInToolNames.RunTerminalCommand,
         undefined,
         "allowedWithoutPermission",
         "disabled",
-        dangerousOn,
+        baseAutoRun,
+        "sudo apt update",
+      ),
+    ).toBe("allowedWithPermission");
+  });
+
+  it("auto-runs after a command is moved from dangerous to allowlist", () => {
+    expect(
+      resolveAutoRunPolicy(
+        BuiltInToolNames.RunTerminalCommand,
+        undefined,
+        "allowedWithoutPermission",
+        "disabled",
+        {
+          ...baseAutoRun,
+          autoRunCommands: ["sudo"],
+          dangerousCommands: ["curl", "rm"],
+        },
+        "sudo apt update",
       ),
     ).toBe("allowedWithoutPermission");
   });
@@ -633,10 +770,11 @@ describe("resolveAutoRunPolicy", () => {
         "disabled",
         "disabled",
         {
-          autoRunSafeTerminalCommands: true,
-          autoRunDangerousTerminalCommands: true,
+          autoRunCommands: ["ls", "sudo"],
+          dangerousCommands: [],
           autoRunMcpTools: true,
         },
+        "ls",
       ),
     ).toBe("disabled");
   });
@@ -648,7 +786,7 @@ describe("resolveAutoRunPolicy", () => {
         mcpTool,
         "allowedWithPermission",
         "allowedWithPermission",
-        { ...safeAutoRun, autoRunMcpTools: true },
+        { ...baseAutoRun, autoRunMcpTools: true },
       ),
     ).toBe("allowedWithoutPermission");
   });
@@ -660,7 +798,7 @@ describe("resolveAutoRunPolicy", () => {
         mcpTool,
         "allowedWithPermission",
         "allowedWithPermission",
-        safeAutoRun,
+        baseAutoRun,
       ),
     ).toBe("allowedWithPermission");
   });
@@ -672,7 +810,7 @@ describe("resolveAutoRunPolicy", () => {
         mcpTool,
         "disabled",
         "disabled",
-        { ...safeAutoRun, autoRunMcpTools: true },
+        { ...baseAutoRun, autoRunMcpTools: true },
       ),
     ).toBe("disabled");
   });

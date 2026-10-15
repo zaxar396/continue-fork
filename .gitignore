@@ -164,6 +164,7 @@ extensions/intellij/.idea/**
 
 extensions/intellij/bin
 extensions/.continue-debug/
+extensions/.vscode-debug-user/
 
 # intellij module library files
 *.iml
@@ -176,4 +177,7 @@ keys
 .users_cache.json
 .copy-status
 .copy-log
+
+# Packaged IDE extensions (often >100 MB; GitHub rejects the push)
+*.vsix
 

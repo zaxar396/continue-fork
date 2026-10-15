@@ -377,7 +377,12 @@ describe("tool call loop", () => {
           toolCallStates: [{ toolCallId: "1" }],
         },
         { message: { role: "tool", content: "edited" } },
-        { message: { role: "assistant", content: "Now let me create the files." } },
+        {
+          message: {
+            role: "assistant",
+            content: "Now let me create the files.",
+          },
+        },
       ]),
     ).toBe(false);
     expect(
@@ -395,7 +400,8 @@ describe("tool call loop", () => {
   it("allows another phrase nudge after a successful tool", () => {
     const nudged = { ...EMPTY_TOOL_LOOP, phraseNudgeSent: true };
     expect(
-      noteToolBatchOutcome(nudged, { ok: true, output: "edited" }).phraseNudgeSent,
+      noteToolBatchOutcome(nudged, { ok: true, output: "edited" })
+        .phraseNudgeSent,
     ).toBe(false);
     expect(
       noteToolBatchOutcome(nudged, { ok: false, output: "no" }).phraseNudgeSent,

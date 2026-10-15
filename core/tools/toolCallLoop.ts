@@ -92,8 +92,7 @@ export function noteToolBatch(
   state: ToolLoopState,
   signature: string,
 ): { state: ToolLoopState; action: "continue" | "warn" | "stop" } {
-  const consecutive =
-    state.signature === signature ? state.consecutive + 1 : 1;
+  const consecutive = state.signature === signature ? state.consecutive + 1 : 1;
   const next: ToolLoopState = {
     ...state,
     signature,
@@ -227,7 +226,10 @@ export function turnSpokenText(
     if (item.reasoning?.text) {
       parts.push(item.reasoning.text);
     }
-    if (typeof item.message.content === "string" && item.message.content.trim()) {
+    if (
+      typeof item.message.content === "string" &&
+      item.message.content.trim()
+    ) {
       parts.push(item.message.content);
     }
   }
@@ -302,7 +304,9 @@ export function isRepeatedPhrase(
       continue;
     }
     const tail = sentences.slice(-need);
-    const repeats = tail.every((sentence, index) => sentence === tail[index % size]);
+    const repeats = tail.every(
+      (sentence, index) => sentence === tail[index % size],
+    );
     if (repeats) {
       return true;
     }
